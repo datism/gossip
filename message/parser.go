@@ -62,7 +62,7 @@ func Parse(data []byte) (*SIPMessage, error) {
 			// continue
 		}
 		
-		key := strings.TrimSpace(parts[0])
+		key := strings.ToLower(strings.TrimSpace(parts[0]))
 		values := strings.Split(parts[1], ",")
 		for _, value := range values {
 			msg.Headers[key] = append(msg.Headers[key], strings.TrimSpace(value))

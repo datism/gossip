@@ -6,7 +6,7 @@ import (
 
 
 func HandleMessage(msg *message.SIPMessage) {
-	if (msg.Request == nil) {
+	if (msg.Request != nil) {
 		handleRequest(msg)
 	} else {
 		handleResponse(msg)
