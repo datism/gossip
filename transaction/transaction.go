@@ -2,11 +2,12 @@ package transaction
 
 import (
 	"errors"
+	"fmt"
 	"gossip/message"
 	"sync"
 )
 
-type TransType int 
+type TransType int
 
 const (
 	INVITE_CLIENT = iota
@@ -16,10 +17,14 @@ const (
 )
 
 type TransID struct {
-	Type TransType
+	// Type     TransType
 	BranchID string
-	Method string
-	SentBy string
+	Method   string
+	SentBy   string
+}
+
+func (tid TransID) String() string {
+	return fmt.Sprintf("%s;%s;%s", tid.BranchID, tid.Method, tid.SentBy)
 }
 
 type EventType int
@@ -32,12 +37,13 @@ const (
 
 type Event struct {
 	Type EventType
-	Data *interface{} 
+	Data interface{}
 }
 
-type TransCom struct {
-	TransSend <-chan *Event 
-	TransRecv chan<- *Event
+type Transaction struct {
+	ID *TransID
+	Type TransType
+	Channel chan Event
 }
 
 var m sync.Map
@@ -71,43 +77,53 @@ func MakeTransactionID(msg *message.SIPMessage) (*TransID, error) {
 
 	vias := message.GetHeader(msg, "via")
 	if vias == nil {
-		return nil, errors.New("cannot create transction id with empty via header")
+		return nil, errors.New("empty via header")
 	}
 	topmostVia := vias[0]
 
 	branch := message.GetParam(topmostVia, "branch")
 	if branch == "" {
-		return nil, errors.New("cannot create transaction id with empty branch value")
+		return nil, errors.New("empty branch value")
 	}
 
-	if (msg.Request == nil) {
+	if msg.Request == nil {
 		cseq := message.GetHeader(msg, "cseq")
 		if cseq == nil {
-			return nil, errors.New("cannot create transction id with empty cseq header")
+			return nil, errors.New("empty cseq header")
 		}
 		method := message.GetValueALWS(message.GetValue(cseq[0]))
 
 		return &TransID{
 			BranchID: branch,
-			Method: method,
+			Method:   method,
 		}, nil
 	} else {
 		method := msg.Request.Method
-		if (method == "ACK") {
+		if method == "ACK" {
 			method = "INVITE"
 		}
 
 		return &TransID{
 			BranchID: branch,
-			Method: msg.Request.Method,
-			SentBy: message.GetValueALWS(message.GetValue(topmostVia)),
+			Method:   msg.Request.Method,
+			SentBy:   message.GetValueALWS(message.GetValue(topmostVia)),
 		}, nil
 	}
 }
 
-func StartTransaction(transType TransType, transID *TransID) {
-	sendCh := make(chan *Event, 2) // TransSend channel (receive-only)
-	recvCh := make(chan *Event, 2) // TransRecv channel (send-only)
-	transCom := TransCom{TransSend: sendCh, TransRecv: recvCh}
-	m.Store(&transID, &transCom)
+func StartTransaction(transID *TransID, transType TransType) (*Transaction) {
+	// chan := make(chan Event, 3) 
+	trans := &Transaction{ID: transID, Type: transType, Channel: make(chan Event, 3)}
+	m.Store(&transID, trans)
+	return trans
+}
+
+func FindTransaction(transID *TransID) *Transaction {
+	if trans, ok := m.Load(transID); ok {
+		if transCom, ok := trans.(*Transaction); ok {
+			return transCom
+		}
+	}
+
+	return nil
 }
