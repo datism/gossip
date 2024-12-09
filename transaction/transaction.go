@@ -113,8 +113,7 @@ func MakeTransactionID(msg *message.SIPMessage) (*TransID, error) {
 }
 
 func StartTransaction(transID *TransID, transType TransType) (*Transaction) {
-	// chan := make(chan Event, 3) 
-	trans := &Transaction{ID: transID, Type: transType, Channel: make(chan Event, 3)}
+	trans := &Transaction{ID: transID, Type: transType, TransportChannel: make(chan Event, 3), CoreChannel: make(chan Event, 3)}
 	m.Store(&transID, trans)
 	return trans
 }
