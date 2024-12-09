@@ -43,7 +43,8 @@ type Event struct {
 type Transaction struct {
 	ID *TransID
 	Type TransType
-	Channel chan Event
+	TransportChannel chan Event
+	CoreChannel chan Event
 }
 
 var m sync.Map
