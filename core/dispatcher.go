@@ -16,7 +16,7 @@ func HandleMessage(msg *message.SIPMessage) {
 
 	if trans := transaction.FindTransaction(tid); trans != nil {
 		log.Debug().Msg("Found transaction")
-		trans.Channel <- transaction.Event{Type: transaction.RECV, Data: msg}
+		trans.TransportChannel <- transaction.Event{Type: transaction.RECV, Data: msg}
 	} else {
 		if (msg.Request != nil || msg.Request.Method == "ACK") {
 			log.Error().Msg("Cannot start new transaction")
