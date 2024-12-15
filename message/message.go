@@ -85,3 +85,20 @@ func GetValueALWS(str string) string {
 	}
 	return str[index+1:]
 }
+
+func MakeGeneralResponse(status_code int, reason string, request *SIPMessage) (*SIPMessage) {
+	req_hdr := request.Headers
+	res_hdr :=  make(map[string][]string)
+
+	for _, key := range []string{"via", "call-id", "from", "to", "cseq", "session-id"} {
+        if value, exists := req_hdr[key]; exists { 
+            res_hdr[key] = value
+        }
+    }
+	res_hdr["content-length"] = []string{"0"}
+	
+	return &SIPMessage{
+		Startline: Startline{Response: &Response{StatusCode: status_code, ReasonPhrase: reason},},
+		Headers: res_hdr,
+	}
+}

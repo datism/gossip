@@ -3,7 +3,6 @@ package core
 import (
 	"gossip/message"
 	"gossip/transaction"
-
 	"github.com/rs/zerolog/log"
 )
 
@@ -18,13 +17,13 @@ func HandleMessage(msg *message.SIPMessage) {
 		log.Debug().Msg("Found transaction")
 		trans.TransportChannel <- transaction.Event{Type: transaction.RECV, Data: msg}
 	} else {
-		if (msg.Request != nil || msg.Request.Method == "ACK") {
+		if msg.Request != nil || msg.Request.Method == "ACK" {
 			log.Error().Msg("Cannot start new transaction")
 			return
 		}
 
 		var transType transaction.TransType
-		if (msg.Request.Method == "INVITE") {
+		if msg.Request.Method == "INVITE" {
 			transType = transaction.INVITE_SERVER
 		} else {
 			transType = transaction.NON_INVITE_SERVER
@@ -34,5 +33,3 @@ func HandleMessage(msg *message.SIPMessage) {
 		log.Debug().Msg("Create start transaction with trans id: " + tid.String())
 	}
 }
-
-
