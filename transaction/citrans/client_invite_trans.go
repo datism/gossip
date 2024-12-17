@@ -45,7 +45,7 @@ func Start(trans *transaction.Transaction, message *message.SIPMessage) {
 
 	for {
 		select {
-		case event = <-ctx.recv:
+		case event = <-ctx.recvc:
 		case <-ctx.timers[timer_a].Chan():
 			event = transaction.Event{Type: transaction.TIMER, Data: timer_a}
 		case <-ctx.timers[timer_b].Chan():
