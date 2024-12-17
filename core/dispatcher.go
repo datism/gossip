@@ -3,8 +3,14 @@ package core
 import (
 	"gossip/message"
 	"gossip/transaction"
+	"gossip/transaction/citrans"
+	"gossip/transaction/sitrans"
+	"sync"
+
 	"github.com/rs/zerolog/log"
 )
+
+var m sync.Map
 
 func HandleMessage(msg *message.SIPMessage) {
 	tid, err := transaction.MakeTransactionID(msg)
@@ -13,16 +19,16 @@ func HandleMessage(msg *message.SIPMessage) {
 		return
 	}
 
-	if trans := transaction.FindTransaction(tid); trans != nil {
+	if trans := FindTransaction(tid); trans != nil {
 		log.Debug().Msg("Found transaction")
-		trans.TransportChannel <- transaction.Event{Type: transaction.RECV, Data: msg}
+		trans.RecvChannel <- transaction.Event{Type: transaction.RECV, Data: msg}
 	} else {
-		if msg.Request != nil  {
+		if msg.Request != nil {
 			log.Error().Msg("Cannot start new transaction with response")
 			return
 		}
 
-		if msg.Request.Method == "ACK {
+		if msg.Request.Method == "ACK" {
 			log.Debug().Msg("Cannot start new transaction with ack request...process stateless")
 			//do something
 			return
@@ -35,7 +41,31 @@ func HandleMessage(msg *message.SIPMessage) {
 			transType = transaction.NON_INVITE_SERVER
 		}
 
-		c := transaction.StartTransaction(transType, tid, msg)
+		c := StartTransaction(transType, tid, msg)
 		log.Debug().Msg("Create start transaction with trans id: " + tid.String())
 	}
+}
+
+func StartTransaction(transType transaction.TransType, transID *transaction.TransID, msg *message.SIPMessage) chan transaction.Event {
+	trans := &transaction.Transaction{ID: transID, SendChannel: make(chan transaction.Event, 3), RecvChannel: make(chan transaction.Event, 3)}
+	m.Store(&transID, trans)
+
+	switch transType {
+	case transaction.INVITE_CLIENT:
+		citrans.Start(trans, msg)
+	case transaction.INVITE_SERVER:
+		sitrans.Start(trans, msg)
+	}
+
+	return trans.SendChannel
+}
+
+func FindTransaction(transID *transaction.TransID) *transaction.Transaction {
+	if trans, ok := m.Load(transID); ok {
+		if transCom, ok := trans.(*transaction.Transaction); ok {
+			return transCom
+		}
+	}
+
+	return nil
 }

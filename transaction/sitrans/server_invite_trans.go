@@ -1,4 +1,4 @@
-package citrans
+package sitrans
 
 import (
 	"gossip/message"
@@ -30,8 +30,8 @@ const (
 )
 
 type context struct {
-	transpc  chan transaction.Event
-	corec    chan transaction.Event
+	recvc    chan transaction.Event
+	sendc    chan transaction.Event
 	timers   [3]util.Timer
 	mess     *message.SIPMessage
 	last_res *message.SIPMessage
@@ -42,13 +42,13 @@ func Start(trans *transaction.Transaction, message *message.SIPMessage) {
 	ctx := sinit(trans, message)
 
 	var event transaction.Event
-	ctx.corec <- transaction.Event{Type: transaction.RECV, Data: message}
+	ctx.sendc <- transaction.Event{Type: transaction.RECV, Data: message}
 	ctx.timers[timer_prv].Start(tiprv_dur)
 
 	for {
 		select {
-		case event = <-ctx.transpc:
-		case event = <-ctx.corec:
+		case event = <-ctx.recvc:
+		case event = <-ctx.sendc:
 		case <-ctx.timers[timer_prv].Chan():
 			event = transaction.Event{Type: transaction.TIMER, Data: timer_prv}
 		case <-ctx.timers[timer_g].Chan():
@@ -71,11 +71,11 @@ func sinit(trans *transaction.Transaction, message *message.SIPMessage) *context
 	timerd := util.NewTimer()
 
 	return &context{
-		transpc: trans.TransportChannel,
-		corec:   trans.CoreChannel,
-		timers:  [3]util.Timer{timera, timerb, timerd},
-		mess:    message,
-		state:   proceeding,
+		recvc:  trans.SendChannel,
+		sendc:  trans.RecvChannel,
+		timers: [3]util.Timer{timera, timerb, timerd},
+		mess:   message,
+		state:  proceeding,
 	}
 }
 
@@ -92,7 +92,7 @@ func handle_event(ctx *context, event transaction.Event) {
 
 func handle_timer(ctx *context, event transaction.Event) {
 	if event.Data == timer_h {
-		ctx.corec <- transaction.Event{Type: transaction.TIMER, Data: "timeout"}
+		ctx.sendc <- transaction.Event{Type: transaction.TIMER, Data: "timeout"}
 		ctx.state = terminated
 	} else if event.Data == timer_prv && ctx.state == proceeding {
 		trying100 := message.MakeGeneralResponse(100, "TRYING", ctx.mess)

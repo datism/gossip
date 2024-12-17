@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"gossip/message"
-	"sync"
 )
 
 type TransType int
@@ -41,12 +40,10 @@ type Event struct {
 }
 
 type Transaction struct {
-	ID *TransID
+	ID          *TransID
 	SendChannel chan Event
 	RecvChannel chan Event
 }
-
-var m sync.Map
 
 func MakeTransactionID(msg *message.SIPMessage) (*TransID, error) {
 	/* RFC3261
@@ -109,26 +106,4 @@ func MakeTransactionID(msg *message.SIPMessage) (*TransID, error) {
 			SentBy:   message.GetValueALWS(message.GetValue(topmostVia)),
 		}, nil
 	}
-}
-
-func StartTransaction(transType TransType, transID *TransID, msg *message.SIPMessage) (*Transaction) {
-	trans := &Transaction{ID: transID, Type: transType, SendChannel: make(chan Event, 3), RecvChannel: make(chan Event, 3)}
-	m.Store(&transID, trans)
-
-	switch transType {
-		case INVITE_CLIENT: citrans:Start(trans, msg)
-		case INVITE_SERVER: citrans:Start(trans, msg)
-	}
-	
-	return trans->SendChannel
-}
-
-func FindTransaction(transID *TransID) *Transaction {
-	if trans, ok := m.Load(transID); ok {
-		if transCom, ok := trans.(*Transaction); ok {
-			return transCom
-		}
-	}
-
-	return nil
 }

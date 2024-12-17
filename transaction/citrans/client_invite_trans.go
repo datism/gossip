@@ -2,13 +2,13 @@ package citrans
 
 import (
 	"gossip/message"
-	"gossip/util"
-	"gossip/transport"
 	"gossip/transaction"
+	"gossip/transport"
+	"gossip/util"
 )
 
 const T1 = 500
-const tia_dur = T1 
+const tia_dur = T1
 const tib_dur = 64 * T1
 const tid_dur = 32000
 
@@ -27,12 +27,12 @@ const (
 	terminated
 )
 
-type context struct{
-	recvc <-chan transaction.Event
-	sendc chan<- transaction.Event
+type context struct {
+	recvc  <-chan transaction.Event
+	sendc  chan<- transaction.Event
 	timers [3]util.Timer
-	mess *message.SIPMessage
-	state state
+	mess   *message.SIPMessage
+	state  state
 }
 
 func Start(trans *transaction.Transaction, message *message.SIPMessage) {
@@ -50,7 +50,7 @@ func Start(trans *transaction.Transaction, message *message.SIPMessage) {
 			event = transaction.Event{Type: transaction.TIMER, Data: timer_a}
 		case <-ctx.timers[timer_b].Chan():
 			event = transaction.Event{Type: transaction.TIMER, Data: timer_b}
-		case <- ctx.timers[timer_d].Chan():
+		case <-ctx.timers[timer_d].Chan():
 			event = transaction.Event{Type: transaction.TIMER, Data: timer_d}
 		}
 
@@ -60,35 +60,36 @@ func Start(trans *transaction.Transaction, message *message.SIPMessage) {
 		}
 	}
 
-	
 }
 
-func sinit(trans *transaction.Transaction, message *message.SIPMessage) (*context) {
+func sinit(trans *transaction.Transaction, message *message.SIPMessage) *context {
 	timera := util.NewTimer()
 	timerb := util.NewTimer()
 	timerd := util.NewTimer()
 
 	return &context{
-		recvc: trans.recvchannel,
-		sendc: trans.sendchannel,
-		timers: [3]util.Timer{timera, timerb, timerd}, 
-		mess: message, 
-		state: calling,
-	}	
+		recvc:  trans.RecvChannel,
+		sendc:  trans.SendChannel,
+		timers: [3]util.Timer{timera, timerb, timerd},
+		mess:   message,
+		state:  calling,
+	}
 }
-
 
 func handle_event(ctx *context, event transaction.Event) {
 	switch event.Type {
-	case transaction.TIMER: handle_timer(ctx, event)
-	case transaction.RECV: handle_recv_msg(ctx, event)
-	default: return 
+	case transaction.TIMER:
+		handle_timer(ctx, event)
+	case transaction.RECV:
+		handle_recv_msg(ctx, event)
+	default:
+		return
 	}
 }
 
 func handle_timer(ctx *context, event transaction.Event) {
 	if event.Data == timer_b {
-		ctx.recv <- transaction.Event{Type: transaction.TIMER, Data: "timeout"}
+		ctx.sendc <- transaction.Event{Type: transaction.TIMER, Data: "timeout"}
 		ctx.state = terminated
 	} else if event.Data == timer_a && ctx.state == calling {
 		transport.Send(ctx.mess)
@@ -103,34 +104,34 @@ func handle_recv_msg(ctx *context, event transaction.Event) {
 	if !ok || response.Response == nil {
 		return
 	}
-	
+
 	status_code := response.Response.StatusCode
 	if status_code >= 100 && status_code < 200 {
-		if (ctx.state == calling) {
+		if ctx.state == calling {
 			ctx.timers[timer_a].Stop()
 			ctx.sendc <- event
 			ctx.state = proceeding
-		} else if (ctx.state == proceeding) {
+		} else if ctx.state == proceeding {
 			ctx.sendc <- event
 		}
 	} else if status_code >= 200 && status_code <= 300 && ctx.state < completed {
-			ctx.timers[timer_a].Stop()
-			ctx.timers[timer_b].Stop()
-			ctx.sendc <- event
-			ctx.state = terminated
+		ctx.timers[timer_a].Stop()
+		ctx.timers[timer_b].Stop()
+		ctx.sendc <- event
+		ctx.state = terminated
 	} else if status_code > 300 {
-		if (ctx.state < completed) {
+		if ctx.state < completed {
 			ctx.sendc <- event
 			ack := make_ack(response)
 			transport.Send(ack)
 			ctx.timers[timer_d].Start(tid_dur)
-		} else if (ctx.state == completed) {
+		} else if ctx.state == completed {
 			ack := make_ack(response)
 			transport.Send(ack)
 		}
 	}
 }
 
-func make_ack(response *message.SIPMessage) (*message.SIPMessage) {
+func make_ack(response *message.SIPMessage) *message.SIPMessage {
 	return response
 }

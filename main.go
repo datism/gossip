@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"gossip/message"
 	"gossip/core"
+	"gossip/message"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
