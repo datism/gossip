@@ -42,9 +42,8 @@ type Event struct {
 
 type Transaction struct {
 	ID *TransID
-	Type TransType
-	TransportChannel chan Event
-	CoreChannel chan Event
+	SendChannel chan Event
+	RecvChannel chan Event
 }
 
 var m sync.Map
@@ -112,10 +111,16 @@ func MakeTransactionID(msg *message.SIPMessage) (*TransID, error) {
 	}
 }
 
-func StartTransaction(transID *TransID, transType TransType) (*Transaction) {
-	trans := &Transaction{ID: transID, Type: transType, TransportChannel: make(chan Event, 3), CoreChannel: make(chan Event, 3)}
+func StartTransaction(transType TransType, transID *TransID, msg *message.SIPMessage) (*Transaction) {
+	trans := &Transaction{ID: transID, Type: transType, SendChannel: make(chan Event, 3), RecvChannel: make(chan Event, 3)}
 	m.Store(&transID, trans)
-	return trans
+
+	switch transType {
+		case INVITE_CLIENT: citrans:Start(trans, msg)
+		case INVITE_SERVER: citrans:Start(trans, msg)
+	}
+	
+	return trans->SendChannel
 }
 
 func FindTransaction(transID *TransID) *Transaction {
