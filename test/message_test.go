@@ -3,7 +3,6 @@ package test
 import (
 	"reflect"
 	"testing"
-
 	"gossip/message"
 )
 

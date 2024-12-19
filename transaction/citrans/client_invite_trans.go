@@ -122,16 +122,12 @@ func handle_recv_msg(ctx *context, event transaction.Event) {
 	} else if status_code > 300 {
 		if ctx.state < completed {
 			ctx.sendc <- event
-			ack := make_ack(response)
+			ack := message.MakeGenericAck(ctx.mess, response)
 			transport.Send(ack)
 			ctx.timers[timer_d].Start(tid_dur)
 		} else if ctx.state == completed {
-			ack := make_ack(response)
+			ack := message.MakeGenericAck(ctx.mess, response)
 			transport.Send(ack)
 		}
 	}
-}
-
-func make_ack(response *message.SIPMessage) *message.SIPMessage {
-	return response
 }

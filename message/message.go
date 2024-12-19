@@ -2,6 +2,7 @@ package message
 
 import (
 	"strings"
+	"gossip/message/uri"
 )
 
 type Startline struct {
@@ -12,7 +13,7 @@ type Startline struct {
 // RequestType represents a SIP request
 type Request struct {
 	Method     string
-	RequestURI string
+	RequestURI *uri.SIPUri
 }
 
 // ResponseType represents a SIP response
@@ -21,50 +22,48 @@ type Response struct {
 	ReasonPhrase string
 }
 
-type SIPUri struct {
-	Scheme string
-	User string
-	Pass string
-	Domain string
-	Port int
-	Opts map[string][string]
-	ExtOpts maps[string][string]
-}
-
 type SIPVia struct {
-	Proto string
+	Proto  string
 	Domain string
-	Port int
+	Port   int
 	Branch string
-	Opts map[string][string]
+	Opts   map[string][]string
 }
 
 type SIPCseq struct {
 	Method string
-	Seq int
+	Seq    int
 }
 
 // SIPMessage represents a SIP message
 type SIPMessage struct {
 	Startline
-	From SIPUri
-	To SIPUri
-	CallID string
-	Contacts []SIPUri
-	TopmostVia SIPVia
-	Headers map[string][]string
-	Body    []byte
+	From     *uri.SIPUri
+	To       *uri.SIPUri
+	CSeq     SIPCseq
+	CallID   string
+	Contacts []*uri.SIPUri
+	TopostVia SIPVia
+	Headers  map[string][]string
+	Body     []byte
 }
 
-
-
 // GetHeader returns the values of a specific header
-func GetHeader(msg *SIPMessage, header string) ([]string) {
+func GetHeader(msg *SIPMessage, header string) []string {
 	values, exists := msg.Headers[header]
 	if !exists {
 		return nil
 	} else {
 		return values
+	}
+}
+
+func GetValue(header string) string {
+	end := strings.Index(header, ";")
+	if end == -1 {
+		return header
+	} else {
+		return header[:end]
 	}
 }
 
@@ -87,15 +86,6 @@ func GetParam(header string, param string) string {
 	} else {
 		// Extract the substring between start and end
 		return header[start : start+end]
-	}
-}
-
-func GetValue(header string) (string) {
-	end := strings.Index(header, ";")
-	if end == -1 {
-		return header 
-	} else {
-		return header[:end]
 	}
 }
 
@@ -139,96 +129,81 @@ func SetParam(header string, param string, value string) string {
 	}
 }
 
-// SetValueBLWS sets the value before the first space in the string.
-func SetValueBLWS(str, value string) string {
-	// Find the position of the first space
-	index := strings.Index(str, " ")
-	if index == -1 {
-		// If there is no space, return the value as the new string
-		return value
-	}
-	// Replace the part before the space with the new value
-	return value + str[index:]
-}
-
-// SetValueALWS sets the value after the first space in the string.
-func SetValueALWS(str, value string) string {
-	// Find the position of the first space
-	index := strings.Index(str, " ")
-	if index == -1 {
-		// If there is no space, return the value since nothing to set after
-		return ""
-	}
-	// Replace the part after the space with the new value
-	return str[:index+1] + value
-}
-
-func MakeGeneralResponse(status_code int, reason string, request *SIPMessage) (*SIPMessage) {
+func MakeGenericResponse(status_code int, reason string, request *SIPMessage) *SIPMessage {
 	req_hdr := request.Headers
-	res_hdr :=  make(map[string][]string)
+	res_hdr := make(map[string][]string)
 
-	for _, key := range []string{"via", "call-id", "from", "to", "cseq", "session-id"} {
-        if value, exists := req_hdr[key]; exists { 
-            res_hdr[key] = value
-        }
-    }
+	for _, key := range []string{"via", "session-id"} {
+		if value, exists := req_hdr[key]; exists {
+			res_hdr[key] = value
+		}
+	}
+
 	res_hdr["content-length"] = []string{"0"}
-	
+
 	return &SIPMessage{
-		Startline: Startline{Response: &Response{StatusCode: status_code, ReasonPhrase: reason},},
-		Headers: res_hdr,
+		Startline: Startline{Response: &Response{StatusCode: status_code, ReasonPhrase: reason}},
+		From:      request.From,
+		To:        request.To,
+		CallID:    request.CallID,
+		CSeq:      request.CSeq,
+		Headers:   res_hdr,
 	}
 }
 
-func MakeGeneralAck(inv *SIPMessage, res *SIPMessage) (*SIPMessage) {
+func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 	/* RFC 3261 17.1.1.3
- 	The ACK request constructed by the client transaction MUST contain
-  	values for the Call-ID, From, and Request-URI that are equal to the
-   	values of those header fields in the request passed to the transport
-   	by the client transaction (call this the "original request").
+		The ACK request constructed by the client transaction MUST contain
+	 	values for the Call-ID, From, and Request-URI that are equal to the
+	  	values of those header fields in the request passed to the transport
+	  	by the client transaction (call this the "original request").
 
-    	The To header field in the ACK MUST equal the To header field in the
-   	response being acknowledged, and therefore will usually differ from
-   	the To header field in the original request by the addition of the
-   	tag parameter.
+	   	The To header field in the ACK MUST equal the To header field in the
+	  	response being acknowledged, and therefore will usually differ from
+	  	the To header field in the original request by the addition of the
+	  	tag parameter.
 
-    	The ACK MUST contain a single Via header field, and
-  	this MUST be equal to the top Via header field of the original
-   	request.
+	   	The ACK MUST contain a single Via header field, and
+	 	this MUST be equal to the top Via header field of the original
+	  	request.
 
-    	The CSeq header field in the ACK MUST contain the same
-   	value for the sequence number as was present in the original request,
-   	but the method parameter MUST be equal to "ACK".
+	   	The CSeq header field in the ACK MUST contain the same
+	  	value for the sequence number as was present in the original request,
+	  	but the method parameter MUST be equal to "ACK".
 
-    	If the INVITE request whose response is being acknowledged had Route
-  	header fields, those header fields MUST appear in the ACK.  This is
-   	to ensure that the ACK can be routed properly through any downstream
-   	stateless proxies.
- 	*/
-	inv_hdr := inv.Headers
-	ack_hdr := make(map[string][]string)
+	   	If the INVITE request whose response is being acknowledged had Route
+	 	header fields, those header fields MUST appear in the ACK.  This is
+	  	to ensure that the ACK can be routed properly through any downstream
+	  	stateless proxies.
+	*/
+	var ack = SIPMessage{
+		Startline: Startline{
+			Request: &Request{
+				Method:     "ACK",
+				RequestURI: inv.Request.RequestURI,
+			},
+		},
+	}
 
-	for _, key := range []string{"call-id", "to", "session-id"} {
-        if value, exists := inv_hdr[key]; exists { 
-            ack_hdr[key] = value
-        }
+	if sessionid := GetHeader(inv, "session-id"); sessionid != nil {
+		ack.Headers["session-id"] = sessionid
+	}
 
-	to := GetHeader(res, "to")
-	ack_hdr["to"] = to
+	ack.From = inv.From
+	ack.CallID = inv.CallID
+
+	ack.To = res.To
 
 	vias := GetHeader(inv, "via")
-	ack_hdr["vias"] = []string{vias[0]}
+	ack.Headers["vias"] = []string{vias[0]}
 
-	cseq := GetHeader(inv, "cseq")
-	ack_cseq := SetValueALWS(cseq, "ACK")
-	ack_hdr["cseq"] = []string{ack_cseq}
-	
-	routes := GetHeader(inv, "route")
-	ack_hdr["route"] = routes
-
-	return &SIPMessage{
-		Startline: Startline{Requeest: &Request{Method: "ACK", RequestURI: inv.Request.RequestURI},},
-		Headers: ack_hdr,
+	ack.CSeq = SIPCseq{
+		Method: "ACK",
+		Seq:    inv.CSeq.Seq,
 	}
-    }
+
+	routes := GetHeader(inv, "route")
+	ack.Headers["route"] = routes
+
+	return &ack
 }

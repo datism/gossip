@@ -84,15 +84,9 @@ func MakeTransactionID(msg *message.SIPMessage) (*TransID, error) {
 	}
 
 	if msg.Request == nil {
-		cseq := message.GetHeader(msg, "cseq")
-		if cseq == nil {
-			return nil, errors.New("empty cseq header")
-		}
-		method := message.GetValueALWS(message.GetValue(cseq[0]))
-
 		return &TransID{
 			BranchID: branch,
-			Method:   method,
+			Method:   msg.CSeq.Method,
 		}, nil
 	} else {
 		method := msg.Request.Method

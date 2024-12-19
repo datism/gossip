@@ -41,7 +41,7 @@ func HandleMessage(msg *message.SIPMessage) {
 			transType = transaction.NON_INVITE_SERVER
 		}
 
-		c := StartTransaction(transType, tid, msg)
+		StartTransaction(transType, tid, msg)
 		log.Debug().Msg("Create start transaction with trans id: " + tid.String())
 	}
 }

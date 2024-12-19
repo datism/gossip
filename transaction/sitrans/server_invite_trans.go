@@ -95,7 +95,7 @@ func handle_timer(ctx *context, event transaction.Event) {
 		ctx.sendc <- transaction.Event{Type: transaction.TIMER, Data: "timeout"}
 		ctx.state = terminated
 	} else if event.Data == timer_prv && ctx.state == proceeding {
-		trying100 := message.MakeGeneralResponse(100, "TRYING", ctx.mess)
+		trying100 := message.MakeGenericResponse(100, "TRYING", ctx.mess)
 		transport.Send(trying100)
 	} else if event.Data == timer_g && ctx.state == completed {
 		transport.Send(ctx.last_res)
