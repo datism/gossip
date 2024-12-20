@@ -1,3 +1,5 @@
+package uri
+
 import (
 	"strconv"
 	"strings"

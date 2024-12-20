@@ -1,8 +1,14 @@
 package message
 
 import (
-	"strings"
+	"bufio"
+	"bytes"
+	"errors"
+	"fmt"
 	"gossip/message/uri"
+	"io"
+	"strconv"
+	"strings"
 )
 
 type Startline struct {
@@ -35,17 +41,168 @@ type SIPCseq struct {
 	Seq    int
 }
 
+type SIPFromTo struct {
+	Uri   *uri.SIPUri
+	Tag   string
+	Paras map[string]string
+}
+
+type SIPContact struct {
+	DisName   string
+	Uri       *uri.SIPUri
+	Qvalue    float32
+	Expire    int
+	Paras     map[string]string
+	Supported []string
+}
+
 // SIPMessage represents a SIP message
 type SIPMessage struct {
 	Startline
-	From     *uri.SIPUri
-	To       *uri.SIPUri
-	CSeq     SIPCseq
-	CallID   string
-	Contacts []*uri.SIPUri
-	TopostVia SIPVia
-	Headers  map[string][]string
-	Body     []byte
+	From        *SIPFromTo
+	To          *SIPFromTo
+	CSeq        *SIPCseq
+	CallID      string
+	Contacts    []*SIPContact
+	topmost_via *SIPVia
+	Headers     map[string][]string
+	Body        []byte
+}
+
+func Parse(data []byte) (*SIPMessage, error) {
+	reader := bufio.NewReader(bytes.NewReader(data))
+
+	// Read the start line
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+	startLine := strings.TrimSpace(line)
+
+	// Determine if it's a request or response
+	var msg SIPMessage
+	if strings.HasPrefix(startLine, "SIP/") {
+		// It's a response
+		var version string
+		var statusCode int
+		var reasonPhrase string
+		if _, err := fmt.Sscanf(startLine, "SIP/%s %d %s", &version, &statusCode, &reasonPhrase); err != nil {
+			return nil, err
+		}
+		msg.Startline.Response = &Response{
+			StatusCode:   statusCode,
+			ReasonPhrase: reasonPhrase,
+		}
+	} else {
+		// It's a request
+		var method, requestURI, version string
+		if _, err := fmt.Sscanf(startLine, "%s %s SIP/%s", &method, &requestURI, &version); err != nil {
+			return nil, err
+		}
+		msg.Startline.Request = &Request{
+			Method:     method,
+			RequestURI: uri.Parse(requestURI),
+		}
+	}
+
+	// Read headers
+	msg.Headers = make(map[string][]string)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			break
+		}
+		line = strings.TrimSpace(line)
+		if line == "" {
+			break // End of headers
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			return nil, errors.New("malformed header line")
+			// continue
+		}
+
+		key := strings.ToLower(strings.TrimSpace(parts[0]))
+		values := strings.Split(parts[1], ",")
+		for _, value := range values {
+			if key == "from" {
+				msg.From = ParseFromTo(value)
+			} else if key == "to" {
+				msg.To = ParseFromTo(value)
+			} else if key == "call-id" {
+				msg.CallID = value
+			} else if key == "cseq" {
+				msg.CSeq = ParseCseq(value)
+			} else if key == "contact" {
+				msg.Contacts = append(msg.Contacts, ParseContact(value))
+			} else {
+				msg.Headers[key] = append(msg.Headers[key], strings.TrimSpace(value))
+			}
+		}
+
+		msg.topmost_via = ParseVia(msg.Headers["via"][0])
+	}
+
+	// Read body
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	msg.Body = body
+
+	return &msg, nil
+}
+
+func ParseFromTo(fromto string) *SIPFromTo {
+	var sip_fromto SIPFromTo
+
+	ag_begin := strings.Index(fromto, "<")
+	ag_close := strings.Index(fromto, ">")
+
+	if ag_begin != -1 && ag_close != -1 && ag_begin < ag_close {
+		sip_fromto.Uri = uri.Parse(fromto[ag_begin:ag_close])
+	} else {
+		return nil
+	}
+
+	paras := fromto[ag_close+1:]
+	if strings.HasPrefix(paras, ";") {
+		sip_fromto.Paras = make(map[string]string)
+		for _, kvs := range strings.Split(paras[1:], ";") {
+			kv := strings.SplitN(kvs, "=", 2)
+			if len(kv) == 2 {
+				if kv[0] == "branch" {
+					sip_fromto.Tag = kv[1]
+				}
+				sip_fromto.Paras[kv[0]] = kv[1]
+			}
+		}
+	}
+
+	return &sip_fromto
+}
+
+func ParseCseq(cseq string) *SIPCseq {
+	var sip_cseq SIPCseq
+
+	values := strings.SplitN(cseq, " ", 2)
+	if seq, err := strconv.Atoi(values[0]); err == nil {
+		return nil
+	} else {
+		sip_cseq.Seq = seq
+	}
+
+	sip_cseq.Method = values[1]
+
+	return &sip_cseq
+}
+
+func ParseContact(contact string) *SIPContact {
+	return nil
+}
+
+func ParseVia(via string) *SIPVia {
+	return nil
 }
 
 // GetHeader returns the values of a specific header
@@ -108,23 +265,17 @@ func GetValueALWS(str string) string {
 
 // SetParam sets the value of a specific param in a header, or adds the param if it doesn't exist.
 func SetParam(header string, param string, value string) string {
-	// Find the position of "param" in the header
 	start := strings.Index(header, param)
 	if start == -1 {
-		// Parameter not found, add it to the header
 		return header + ";" + param + "=" + value
 	}
 
-	// Move the start position to the beginning of the parameter's value
 	start += len(param) + 1
 
-	// Find the next ";" to locate the end of the current param value
 	end := strings.Index(header[start:], ";")
 	if end == -1 {
-		// If no ";" is found, the value is till the end of the string
 		return header[:start] + value
 	} else {
-		// Otherwise, replace the value between the start and end positions
 		return header[:start] + value + header[start+end:]
 	}
 }
