@@ -1,6 +1,5 @@
-package uri
-
 import (
+	"strconv"
 	"strings"
 )
 
@@ -16,7 +15,6 @@ type SIPUri struct {
 
 func Parse(uri string) *SIPUri {
 	var sip_uri SIPUri
-	sip_uri.Opts = make(map[string][]string)
 
 	var ui_hp_up_hd string
 	var hp_up_hd string
@@ -31,8 +29,8 @@ func Parse(uri string) *SIPUri {
 	if colon_idx == -1 {
 		return nil
 	} else {
-		scheme = uri[1:colon_idx]
-		if scheme != "sip" && scheme == "sips" && scheme != "tel" {
+		scheme := uri[:colon_idx]
+		if scheme != "sip" && scheme != "sips" && scheme != "tel" {
 			return nil
 		} else {
 			sip_uri.Scheme = scheme
@@ -45,7 +43,7 @@ func Parse(uri string) *SIPUri {
 		user_info = ""
 		hp_up_hd = ui_hp_up_hd
 	} else {
-		user_info = ui_hp_up_hd[1:at_idx]
+		user_info = ui_hp_up_hd[:at_idx]
 		hp_up_hd = ui_hp_up_hd[at_idx+1:]
 	}
 
@@ -54,7 +52,7 @@ func Parse(uri string) *SIPUri {
 		host_port = hp_up_hd
 		up_hd = ""
 	} else {
-		host_port = hp_up_hd[1:seco_idx]
+		host_port = hp_up_hd[:seco_idx]
 		up_hd = hp_up_hd[seco_idx+1:]
 	}
 
@@ -63,7 +61,7 @@ func Parse(uri string) *SIPUri {
 		opts = up_hd
 		headers = ""
 	} else {
-		opts = up_hd[1:ques_idx]
+		opts = up_hd[:ques_idx]
 		headers = up_hd[ques_idx+1:]
 	}
 
@@ -84,7 +82,7 @@ func parse_user_info(user_info string, uri *SIPUri) {
 	if colon_idx == -1 {
 		uri.User = user_info
 	} else {
-		uri.User = user_info[1:colon_idx]
+		uri.User = user_info[:colon_idx]
 		uri.Pass = user_info[colon_idx+1:]
 	}
 }
@@ -98,8 +96,12 @@ func parse_host_port(host_port string, uri *SIPUri) {
 	if colon_idx == -1 {
 		uri.Domain = host_port
 	} else {
-		uri.Domain = user_info[1:colon_idx]
-		uri.Port = user_info[colon_idx+1:]
+		uri.Domain = host_port[:colon_idx]
+		if port, err := strconv.Atoi(host_port[colon_idx+1:]); err == nil {
+			uri.Port = port
+		} else {
+			uri.Port = 5060
+		}
 	}
 }
 
@@ -125,7 +127,7 @@ func parse_headers(headers string, uri *SIPUri) {
 
 	uri.Headers = make(map[string]string)
 
-	for _, kvs := range strings.Split(opts, "&") {
+	for _, kvs := range strings.Split(headers, "&") {
 		kv := strings.SplitN(kvs, "=", 2)
 		if len(kv) == 2 {
 			uri.Headers[kv[0]] = kv[1]
