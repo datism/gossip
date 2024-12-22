@@ -1,9 +1,9 @@
 package test
 
 import (
+	"gossip/message"
 	"reflect"
 	"testing"
-	"gossip/message"
 )
 
 func TestParseRequest(t *testing.T) {

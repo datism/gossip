@@ -33,7 +33,7 @@ type SIPVia struct {
 	Domain string
 	Port   int
 	Branch string
-	Opts   map[string][]string
+	Opts   map[string]string
 }
 
 type SIPCseq struct {
@@ -125,19 +125,47 @@ func Parse(data []byte) (*SIPMessage, error) {
 		key := strings.ToLower(strings.TrimSpace(parts[0]))
 		values := strings.Split(parts[1], ",")
 		for _, value := range values {
-			if key == "from" {
-				msg.From = ParseFromTo(value)
-			} else if key == "to" {
-				msg.To = ParseFromTo(value)
-			} else if key == "call-id" {
-				msg.CallID = value
-			} else if key == "cseq" {
-				msg.CSeq = ParseCseq(value)
-			} else if key == "contact" {
-				msg.Contacts = append(msg.Contacts, ParseContact(value))
-			} else {
-				msg.Headers[key] = append(msg.Headers[key], strings.TrimSpace(value))
+			// if key == "from" {
+			// 	msg.From = ParseFromTo(value)
+			// } else if key == "to" {
+			// 	msg.To = ParseFromTo(value)
+			// } else if key == "call-id" {
+			// 	msg.CallID = value
+			// } else if key == "cseq" {
+			// 	msg.CSeq = ParseCseq(value)
+			// } else if key == "contact" {
+			// 	msg.Contacts = append(msg.Contacts, ParseContact(value))
+			// } else {
+			msg.Headers[key] = append(msg.Headers[key], strings.TrimSpace(value))
+			// }
+		}
+
+		if from := GetHeader(&msg, "from"); from != nil {
+			msg.From = ParseFromTo(from[0])
+			delete(msg.Headers, "from")
+		}
+
+		if to := GetHeader(&msg, "to"); to != nil {
+			msg.To = ParseFromTo(to[0])
+			delete(msg.Headers, "to")
+		}
+
+		if callid := GetHeader(&msg, "call-id"); callid != nil {
+			msg.CallID = callid[0]
+			delete(msg.Headers, "call-id")
+		}
+
+		if cseq := GetHeader(&msg, "cseq"); cseq != nil {
+			msg.CSeq = ParseCseq(cseq[0])
+			delete(msg.Headers, "cseq")
+		}
+
+		if contacts := GetHeader(&msg, "contact"); contacts != nil {
+			msg.Contacts = make([]*SIPContact, 0)
+			for _, contact := range contacts {
+				msg.Contacts = append(msg.Contacts, ParseContact(contact))
 			}
+			delete(msg.Headers, "contact")
 		}
 
 		msg.topmost_via = ParseVia(msg.Headers["via"][0])
@@ -198,11 +226,143 @@ func ParseCseq(cseq string) *SIPCseq {
 }
 
 func ParseContact(contact string) *SIPContact {
-	return nil
+	var sip_contact SIPContact
+
+	if contact == "*" {
+		sip_contact.DisName = "*"
+		return &sip_contact
+	}
+
+	var dsip_name string
+	var addr_spec string
+	var params string
+
+	ag_begin := strings.Index(contact, "<")
+	if ag_begin != -1 {
+		dsip_name = ""
+		sc_idx := strings.Index(contact, ";")
+		if sc_idx != -1 {
+			addr_spec = contact[:sc_idx]
+			params = contact[sc_idx+1:]
+		} else {
+			addr_spec = contact
+			params = ""
+		}
+	} else {
+		dsip_name = contact[:ag_begin]
+		ag_close := strings.Index(contact, ">")
+		if ag_close > ag_begin {
+			addr_spec = contact[ag_begin+1 : ag_close]
+			if sc_idx := strings.Index(contact[ag_close+1:], ";"); sc_idx != -1 {
+				params = contact[ag_close+1+sc_idx:]
+			} else {
+				params = ""
+			}
+		}
+	}
+
+	sip_contact.DisName = dsip_name
+	sip_contact.Uri = uri.Parse(addr_spec)
+	ParseContactParams(params, &sip_contact)
+
+	return &sip_contact
+}
+
+func ParseContactParams(params string, contact *SIPContact) {
+	if params == "" {
+		return
+	}
+
+	contact.Paras = make(map[string]string)
+	contact.Supported = make([]string, 0)
+
+	for _, kvs := range strings.Split(params, ";") {
+		kv := strings.SplitN(kvs, "=", 2)
+		if len(kv) == 2 {
+			if kv[0] == "q" {
+				qvalue, err := strconv.ParseFloat(kv[1], 32)
+				if err != nil {
+					contact.Qvalue = float32(qvalue)
+				}
+			} else if kv[0] == "expires" {
+				expires, err := strconv.Atoi(kv[1])
+				if err != nil {
+					contact.Expire = expires
+				}
+			} else {
+				contact.Paras[kv[0]] = kv[1]
+			}
+		} else if len(kv) == 1 {
+			contact.Supported = append(contact.Supported, kv[0])
+		}
+	}
 }
 
 func ParseVia(via string) *SIPVia {
-	return nil
+	var sip_via SIPVia
+	var sp_pa string
+	var sent_proto string
+	var sent_by string
+	var params string
+
+	space_idx := strings.Index(via, " ")
+	if space_idx == -1 {
+		return nil
+	} else {
+		sent_proto = via[:space_idx]
+		sp_pa = via[space_idx+1:]
+	}
+
+	sc_idx := strings.Index(sp_pa, ";")
+	if sc_idx != -1 {
+		sent_by = sp_pa[:sc_idx]
+		params = sp_pa[sc_idx+1:]
+	} else {
+		sent_by = sp_pa
+		params = ""
+	}
+
+	ParseViaProto(sent_proto, &sip_via)
+	ParseViaSentBy(sent_by, &sip_via)
+	ParseViaParams(params, &sip_via)
+
+	return &sip_via
+}
+
+func ParseViaProto(proto string, via *SIPVia) {
+	strs := strings.SplitN(proto, "/", 3)
+	via.Proto = strs[2]
+}
+
+func ParseViaSentBy(sentby string, via *SIPVia) {
+	colon_idx := strings.Index(sentby, ":")
+	if colon_idx != -1 {
+		via.Domain = sentby
+	} else {
+		via.Domain = sentby[:colon_idx]
+		if port, err := strconv.Atoi(sentby[colon_idx+1:]); err == nil {
+			via.Port = port
+		}
+	}
+}
+
+func ParseViaParams(params string, via *SIPVia) {
+	if params == "" {
+		return
+	}
+
+	via.Opts = make(map[string]string)
+
+	for _, kvs := range strings.Split(params, ";") {
+		kv := strings.SplitN(kvs, "=", 2)
+		if len(kv) == 2 {
+			if kv[0] == "branch" {
+				via.Branch = kv[1]
+			} else {
+				via.Opts[kv[0]] = kv[1]
+			}
+		}
+	}
 }
 
 // GetHeader returns the values of a specific header
