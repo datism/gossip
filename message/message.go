@@ -187,8 +187,8 @@ func ParseFromTo(fromto string) *SIPFromTo {
 	ag_begin := strings.Index(fromto, "<")
 	ag_close := strings.Index(fromto, ">")
 
-	if ag_begin != -1 && ag_close != -1 && ag_begin < ag_close {
-		sip_fromto.Uri = uri.Parse(fromto[ag_begin:ag_close])
+	if ag_begin != -1 && ag_begin < ag_close {
+		sip_fromto.Uri = uri.Parse(fromto[ag_begin+1:ag_close])
 	} else {
 		return nil
 	}
@@ -238,7 +238,7 @@ func ParseContact(contact string) *SIPContact {
 	var params string
 
 	ag_begin := strings.Index(contact, "<")
-	if ag_begin != -1 {
+	if ag_begin == -1 {
 		dsip_name = ""
 		sc_idx := strings.Index(contact, ";")
 		if sc_idx != -1 {
@@ -254,7 +254,7 @@ func ParseContact(contact string) *SIPContact {
 		if ag_close > ag_begin {
 			addr_spec = contact[ag_begin+1 : ag_close]
 			if sc_idx := strings.Index(contact[ag_close+1:], ";"); sc_idx != -1 {
-				params = contact[ag_close+1+sc_idx:]
+				params = contact[ag_close+1+sc_idx+1:]
 			} else {
 				params = ""
 			}
@@ -280,13 +280,11 @@ func ParseContactParams(params string, contact *SIPContact) {
 		kv := strings.SplitN(kvs, "=", 2)
 		if len(kv) == 2 {
 			if kv[0] == "q" {
-				qvalue, err := strconv.ParseFloat(kv[1], 32)
-				if err != nil {
+				if qvalue, err := strconv.ParseFloat(kv[1], 32); err == nil {
 					contact.Qvalue = float32(qvalue)
 				}
 			} else if kv[0] == "expires" {
-				expires, err := strconv.Atoi(kv[1])
-				if err != nil {
+				if expires, err := strconv.Atoi(kv[1]); err == nil {
 					contact.Expire = expires
 				}
 			} else {
@@ -336,7 +334,7 @@ func ParseViaProto(proto string, via *SIPVia) {
 
 func ParseViaSentBy(sentby string, via *SIPVia) {
 	colon_idx := strings.Index(sentby, ":")
-	if colon_idx != -1 {
+	if colon_idx == -1 {
 		via.Domain = sentby
 	} else {
 		via.Domain = sentby[:colon_idx]
