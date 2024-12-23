@@ -97,6 +97,7 @@ func parse_host_port(host_port string, uri *SIPUri) {
 	colon_idx := strings.Index(host_port, ":")
 	if colon_idx == -1 {
 		uri.Domain = host_port
+		uri.Port = 5060
 	} else {
 		uri.Domain = host_port[:colon_idx]
 		if port, err := strconv.Atoi(host_port[colon_idx+1:]); err == nil {
