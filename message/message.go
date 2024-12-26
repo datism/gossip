@@ -307,6 +307,6 @@ func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 			Seq:    inv.CSeq.Seq,
 		},
 		Headers:   ack_hdr,
-		Transport: inv.Transport
+		Transport: inv.Transport,
 	}
 }
