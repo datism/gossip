@@ -11,7 +11,7 @@ type SIPFromTo struct {
 	Paras map[string]string
 }
 
-func ParseFromTo(fromto string) *SIPFromTo {
+func Parse(fromto string) *SIPFromTo {
 	var sip_fromto SIPFromTo
 
 	ag_begin := strings.Index(fromto, "<")
