@@ -15,7 +15,7 @@ type SIPContact struct {
 	Supported []string
 }
 
-func ParseContact(contact string) *SIPContact {
+func Parse(contact string) *SIPContact {
 	var sip_contact SIPContact
 
 	if contact == "*" {

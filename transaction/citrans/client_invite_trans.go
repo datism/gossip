@@ -28,15 +28,16 @@ const (
 )
 
 type context struct {
-	recvc  <-chan transaction.Event
-	sendc  chan<- transaction.Event
-	timers [3]util.Timer
-	mess   *message.SIPMessage
-	state  state
+	recvc     <-chan transaction.Event
+	sendc     chan<- transaction.Event
+	timers    [3]util.Timer
+	mess      *message.SIPMessage
+	transport *transport.Transport
+	state     state
 }
 
-func Start(trans *transaction.Transaction, message *message.SIPMessage) {
-	ctx := sinit(trans, message)
+func Start(trans *transaction.Transaction, transport *transport.Transport, message *message.SIPMessage) {
+	ctx := sinit(trans, transport, message)
 
 	ctx.timers[timer_b].Start(tib_dur)
 	ctx.timers[timer_a].Start(tia_dur)
@@ -62,17 +63,18 @@ func Start(trans *transaction.Transaction, message *message.SIPMessage) {
 
 }
 
-func sinit(trans *transaction.Transaction, message *message.SIPMessage) *context {
+func sinit(trans *transaction.Transaction, transport *transport.Transport, message *message.SIPMessage) *context {
 	timera := util.NewTimer()
 	timerb := util.NewTimer()
 	timerd := util.NewTimer()
 
 	return &context{
-		recvc:  trans.RecvChannel,
-		sendc:  trans.SendChannel,
-		timers: [3]util.Timer{timera, timerb, timerd},
-		mess:   message,
-		state:  calling,
+		recvc:     trans.RecvChannel,
+		sendc:     trans.SendChannel,
+		timers:    [3]util.Timer{timera, timerb, timerd},
+		mess:      message,
+		transport: transport,
+		state:     calling,
 	}
 }
 
@@ -92,7 +94,7 @@ func handle_timer(ctx *context, event transaction.Event) {
 		ctx.sendc <- transaction.Event{Type: transaction.TIMER, Data: "timeout"}
 		ctx.state = terminated
 	} else if event.Data == timer_a && ctx.state == calling {
-		transport.Send(ctx.mess)
+		transport.Send(ctx.transport, ctx.mess)
 		ctx.timers[timer_a].Start(ctx.timers[timer_a].Duration() * 2)
 	} else if event.Data == timer_d && ctx.state == completed {
 		ctx.state = terminated
@@ -123,11 +125,11 @@ func handle_recv_msg(ctx *context, event transaction.Event) {
 		if ctx.state < completed {
 			ctx.sendc <- event
 			ack := message.MakeGenericAck(ctx.mess, response)
-			transport.Send(ack)
+			transport.Send(ctx.transport, ack)
 			ctx.timers[timer_d].Start(tid_dur)
 		} else if ctx.state == completed {
 			ack := message.MakeGenericAck(ctx.mess, response)
-			transport.Send(ack)
+			transport.Send(ctx.transport, ack)
 		}
 	}
 }

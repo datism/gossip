@@ -12,6 +12,7 @@ type Transport struct {
 	RemoteAddr *net.UDPAddr
 }
 
-func Send(msg *message.SIPMessage) {
+
+func Send(trans *Transport, msg *message.SIPMessage) {
 
 }

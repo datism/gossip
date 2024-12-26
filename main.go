@@ -7,6 +7,7 @@ import (
 
 	"gossip/core"
 	"gossip/message"
+	"gossip/transport"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -75,5 +76,17 @@ func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
 		log.Error().Err(err).Msg("Error parsing SIP request")
 	}
 
-	core.HandleMessage(msg)
+	udp_addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return
+	}
+
+	transport := &transport.Transport{
+		Protocol:   "UDP",
+		Socket:     conn,
+		LocalAddr:  udp_addr,
+		RemoteAddr: clientAddr,
+	}
+
+	core.HandleMessage(transport, msg)
 }

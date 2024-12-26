@@ -13,7 +13,6 @@ import (
 	"gossip/message/contact"
 	"gossip/message/fromto"
 	"gossip/message/cseq"
-	"gossip/transport"
 )
 
 type Startline struct {
@@ -36,15 +35,14 @@ type Response struct {
 // SIPMessage represents a SIP message
 type SIPMessage struct {
 	Startline
-	From        *SIPFromTo
-	To          *SIPFromTo
-	CSeq        *SIPCseq
+	From        *fromto.SIPFromTo
+	To          *fromto.SIPFromTo
+	CSeq        *cseq.SIPCseq
 	CallID      string
-	Contacts    []*SIPContact
-	TopmostVia *SIPVia
+	Contacts    []*contact.SIPContact
+	TopmostVia *via.SIPVia
 	Headers     map[string][]string
 	Body        []byte
-	Transport   *transport.Transport 
 }
 
 func Parse(data []byte) (*SIPMessage, error) {
@@ -133,13 +131,13 @@ func Parse(data []byte) (*SIPMessage, error) {
 			delete(msg.Headers, "call-id")
 		}
 
-		if cseq := GetHeader(&msg, "cseq"); cseq != nil {
-			msg.CSeq = cseq.Parse(cseq[0])
+		if cseq_hdr := GetHeader(&msg, "cseq"); cseq_hdr != nil {
+			msg.CSeq = cseq.Parse(cseq_hdr[0])
 			delete(msg.Headers, "cseq")
 		}
 
 		if contacts := GetHeader(&msg, "contact"); contacts != nil {
-			msg.Contacts = make([]*SIPContact, 0)
+			msg.Contacts = make([]*contact.SIPContact, 0)
 			for _, cont := range contacts {
 				msg.Contacts = append(msg.Contacts, contact.Parse(cont))
 			}
@@ -255,7 +253,6 @@ func MakeGenericResponse(status_code int, reason string, request *SIPMessage) *S
 		TopmostVia: request.TopmostVia,
 		CSeq:      request.CSeq,
 		Headers:   res_hdr,
-		Transport: request.Transport,
 	}
 }
 
@@ -298,15 +295,14 @@ func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 				RequestURI: inv.Request.RequestURI,
 			},
 		},
-		From = inv.From,
-		CallID = inv.CallID,
-		To = rest.To,
-		TopmostVia = inv.TopmostVia,
-		Cseq = cseq.SIPCseq{
+		From : inv.From,
+		CallID : inv.CallID,
+		To : res.To,
+		TopmostVia : inv.TopmostVia,
+		CSeq : &cseq.SIPCseq{
 			Method: "ACK",
 			Seq:    inv.CSeq.Seq,
 		},
-		Headers:   ack_hdr,
-		Transport: inv.Transport,
+		Headers: ack_hdr,
 	}
 }
