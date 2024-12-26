@@ -13,6 +13,7 @@ import (
 	"gossip/message/contact"
 	"gossip/message/fromto"
 	"gossip/message/cseq"
+	"gossip/transport"
 )
 
 type Startline struct {
@@ -43,6 +44,7 @@ type SIPMessage struct {
 	TopmostVia *SIPVia
 	Headers     map[string][]string
 	Body        []byte
+	Transport   *transport.Transport 
 }
 
 func Parse(data []byte) (*SIPMessage, error) {
@@ -253,6 +255,7 @@ func MakeGenericResponse(status_code int, reason string, request *SIPMessage) *S
 		TopmostVia: request.TopmostVia,
 		CSeq:      request.CSeq,
 		Headers:   res_hdr,
+		Transport: request.Transport,
 	}
 }
 
@@ -281,33 +284,29 @@ func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 	  	to ensure that the ACK can be routed properly through any downstream
 	  	stateless proxies.
 	*/
-	var ack = SIPMessage{
+	ack_hdr := make(map[string][]string)
+	if sessionid := GetHeader(inv, "session-id"); sessionid != nil {
+		ack_hdr["session-id"] = sessionid
+	}
+	routes := GetHeader(inv, "route")
+	ack_hdr["route"] = routes
+
+	return &SIPMessage{
 		Startline: Startline{
 			Request: &Request{
 				Method:     "ACK",
 				RequestURI: inv.Request.RequestURI,
 			},
 		},
+		From = inv.From,
+		CallID = inv.CallID,
+		To = rest.To,
+		TopmostVia = inv.TopmostVia,
+		Cseq = cseq.SIPCseq{
+			Method: "ACK",
+			Seq:    inv.CSeq.Seq,
+		},
+		Headers:   ack_hdr,
+		Transport: inv.Transport
 	}
-
-	if sessionid := GetHeader(inv, "session-id"); sessionid != nil {
-		ack.Headers["session-id"] = sessionid
-	}
-
-	ack.From = inv.From
-	ack.CallID = inv.CallID
-
-	ack.To = res.To
-
-	ack.TopmostVia = inv.TopmostVia
-
-	ack.CSeq = SIPCseq{
-		Method: "ACK",
-		Seq:    inv.CSeq.Seq,
-	}
-
-	routes := GetHeader(inv, "route")
-	ack.Headers["route"] = routes
-
-	return &ack
 }
