@@ -6,7 +6,9 @@ import (
 )
 
 type Transport struct {
-	Sock *net.UDPConn
+	Protocol string
+	Socket *net.UDPConn
+	LocalAddr *net.UDPAddr
 	RemoteAddr *net.UDPAddr
 }
 
