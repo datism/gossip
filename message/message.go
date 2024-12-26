@@ -40,7 +40,7 @@ type SIPMessage struct {
 	CSeq        *SIPCseq
 	CallID      string
 	Contacts    []*SIPContact
-	topmost_via *SIPVia
+	TopmostVia *SIPVia
 	Headers     map[string][]string
 	Body        []byte
 }
@@ -144,7 +144,8 @@ func Parse(data []byte) (*SIPMessage, error) {
 			delete(msg.Headers, "contact")
 		}
 
-		msg.topmost_via = via.Parse(msg.Headers["via"][0])
+		msg.TopmostVia = via.Parse(msg.Headers["via"][0])
+		msg.Headers["via"] = msg.Headers["via"][1:]
 	}
 
 	// Read body
@@ -249,6 +250,7 @@ func MakeGenericResponse(status_code int, reason string, request *SIPMessage) *S
 		From:      request.From,
 		To:        request.To,
 		CallID:    request.CallID,
+		TopmostVia: request.TopmostVia,
 		CSeq:      request.CSeq,
 		Headers:   res_hdr,
 	}
@@ -297,8 +299,7 @@ func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 
 	ack.To = res.To
 
-	vias := GetHeader(inv, "via")
-	ack.Headers["vias"] = []string{vias[0]}
+	ack.TopmostVia = inv.TopmostVia
 
 	ack.CSeq = SIPCseq{
 		Method: "ACK",
