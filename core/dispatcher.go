@@ -1,10 +1,10 @@
 package core
 
 import (
+	"gossip/event"
 	"gossip/message"
 	"gossip/transaction"
 	"gossip/transaction/citrans"
-	"gossip/transaction/sitrans"
 	"gossip/transport"
 	"sync"
 
@@ -22,7 +22,7 @@ func HandleMessage(transport *transport.Transport, msg *message.SIPMessage) {
 
 	if trans := FindTransaction(tid); trans != nil {
 		log.Debug().Msg("Found transaction")
-		trans.RecvChannel <- transaction.Event{Type: transaction.RECV, Data: msg}
+		trans.Send(event.Event{Type: event.RECV, Data: msg})
 	} else {
 		if msg.Request != nil {
 			log.Error().Msg("Cannot start new transaction with response")
@@ -47,23 +47,35 @@ func HandleMessage(transport *transport.Transport, msg *message.SIPMessage) {
 	}
 }
 
-func StartTransaction(transType transaction.TransType, transID *transaction.TransID, transport *transport.Transport, msg *message.SIPMessage) chan transaction.Event {
-	trans := &transaction.Transaction{ID: transID, SendChannel: make(chan transaction.Event, 3), RecvChannel: make(chan transaction.Event, 3)}
-	m.Store(&transID, trans)
+func StartTransaction(
+	transType transaction.TransType, 
+	transID *transaction.TransID, 
+	trpt *transport.Transport,
+	msg *message.SIPMessage,
+	)  {
+
+	var trans transaction.Transaction
 
 	switch transType {
 	case transaction.INVITE_CLIENT:
-		citrans.Start(trans, transport, msg)
-	case transaction.INVITE_SERVER:
-		sitrans.Start(trans, transport, msg)
+		trans = citrans.Make(msg, TransportCallback, CoreCallback)
 	}
 
-	return trans.SendChannel
+	m.Store(&transID, trans)
+	trans.Start()
 }
 
-func FindTransaction(transID *transaction.TransID) *transaction.Transaction {
+func CoreCallback(from transaction.Transaction, ev event.Event) {
+
+}
+
+func TransportCallback(from transaction.Transaction, ev event.Event) {
+
+}
+
+func FindTransaction(transID *transaction.TransID) transaction.Transaction {
 	if trans, ok := m.Load(transID); ok {
-		if transCom, ok := trans.(*transaction.Transaction); ok {
+		if transCom, ok := trans.(transaction.Transaction); ok {
 			return transCom
 		}
 	}

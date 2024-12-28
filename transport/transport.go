@@ -2,7 +2,6 @@ package transport
 
 import (
 	"net"
-	"gossip/message"
 )
 
 type Transport struct {
@@ -13,6 +12,3 @@ type Transport struct {
 }
 
 
-func Send(trans *Transport, msg *message.SIPMessage) {
-
-}

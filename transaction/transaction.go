@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"fmt"
+	"gossip/event"
 	"gossip/message"
 )
 
@@ -25,24 +26,11 @@ func (tid TransID) String() string {
 	return fmt.Sprintf("%s;%s;%s", tid.BranchID, tid.Method, tid.SentBy)
 }
 
-type EventType int
-
-const (
-	RECV = iota
-	SEND
-	TIMER
-)
-
-type Event struct {
-	Type EventType
-	Data interface{}
+type Transaction interface {
+	Send(event event.Event)
+	Start()
 }
 
-type Transaction struct {
-	ID          *TransID
-	SendChannel chan Event
-	RecvChannel chan Event
-}
 
 func MakeTransactionID(msg *message.SIPMessage) (*TransID, error) {
 	/* RFC3261

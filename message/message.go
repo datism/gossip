@@ -8,11 +8,12 @@ import (
 	"io"
 	"strings"
 
+	"gossip/message/contact"
+	"gossip/message/cseq"
+	"gossip/message/fromto"
 	"gossip/message/uri"
 	"gossip/message/via"
-	"gossip/message/contact"
-	"gossip/message/fromto"
-	"gossip/message/cseq"
+	"gossip/transport"
 )
 
 type Startline struct {
@@ -35,14 +36,15 @@ type Response struct {
 // SIPMessage represents a SIP message
 type SIPMessage struct {
 	Startline
-	From        *fromto.SIPFromTo
-	To          *fromto.SIPFromTo
-	CSeq        *cseq.SIPCseq
-	CallID      string
-	Contacts    []*contact.SIPContact
+	From       *fromto.SIPFromTo
+	To         *fromto.SIPFromTo
+	CSeq       *cseq.SIPCseq
+	CallID     string
+	Contacts   []*contact.SIPContact
 	TopmostVia *via.SIPVia
-	Headers     map[string][]string
-	Body        []byte
+	Headers    map[string][]string
+	Body       []byte
+	Transport  *transport.Transport
 }
 
 func Parse(data []byte) (*SIPMessage, error) {
@@ -117,7 +119,6 @@ func Parse(data []byte) (*SIPMessage, error) {
 		}
 	}
 
-	
 	if from := GetHeader(&msg, "from"); from != nil {
 		msg.From = fromto.Parse(from[0])
 		delete(msg.Headers, "from")
@@ -247,13 +248,14 @@ func MakeGenericResponse(status_code int, reason string, request *SIPMessage) *S
 	res_hdr["content-length"] = []string{"0"}
 
 	return &SIPMessage{
-		Startline: Startline{Response: &Response{StatusCode: status_code, ReasonPhrase: reason}},
-		From:      request.From,
-		To:        request.To,
-		CallID:    request.CallID,
+		Startline:  Startline{Response: &Response{StatusCode: status_code, ReasonPhrase: reason}},
+		From:       request.From,
+		To:         request.To,
+		CallID:     request.CallID,
 		TopmostVia: request.TopmostVia,
-		CSeq:      request.CSeq,
-		Headers:   res_hdr,
+		CSeq:       request.CSeq,
+		Headers:    res_hdr,
+		Transport:  request.Transport,
 	}
 }
 
@@ -296,14 +298,15 @@ func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 				RequestURI: inv.Request.RequestURI,
 			},
 		},
-		From : inv.From,
-		CallID : inv.CallID,
-		To : res.To,
-		TopmostVia : inv.TopmostVia,
-		CSeq : &cseq.SIPCseq{
+		From:       inv.From,
+		CallID:     inv.CallID,
+		To:         res.To,
+		TopmostVia: inv.TopmostVia,
+		CSeq: &cseq.SIPCseq{
 			Method: "ACK",
 			Seq:    inv.CSeq.Seq,
 		},
 		Headers: ack_hdr,
+		Transport: inv.Transport,
 	}
 }

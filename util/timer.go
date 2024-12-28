@@ -4,39 +4,38 @@ import (
 	"time"
 )
 
-type Timer struct{
-	timer *time.Timer
+type Timer struct {
+	timer    *time.Timer
 	duration int
-	is_running bool
 }
 
-func NewTimer() Timer{
+func NewTimer() Timer {
 	timer := time.NewTimer(0)
 	if !timer.Stop() {
-		<- timer.C
+		<-timer.C
 	}
-	return Timer{timer: timer, duration: 0, is_running: false}
+	return Timer{timer: timer, duration: 0}
 }
 
 func (t *Timer) Start(duration int) {
-	if t.is_running {
-		if !t.timer.Stop() {
-			<- t.timer.C
+	if !t.timer.Stop() {
+		select {
+		case <-t.timer.C:
+		default:
 		}
 	}
-	
-	t.timer.Reset(time.Duration(duration) * time.Microsecond)
-	t.is_running = true
-} 
+
+	t.duration = duration
+	t.timer.Reset(time.Duration(duration) * time.Millisecond)
+}
 
 func (t *Timer) Stop() {
-	if t.is_running {
-		if !t.timer.Stop() {
-			<- t.timer.C
+	if !t.timer.Stop() {
+		select {
+		case <-t.timer.C:
+		default:
 		}
 	}
-
-	t.is_running = false
 }
 
 func (t Timer) Chan() <-chan time.Time {
@@ -46,4 +45,3 @@ func (t Timer) Chan() <-chan time.Time {
 func (t Timer) Duration() int {
 	return t.duration
 }
-
