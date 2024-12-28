@@ -18,6 +18,9 @@ type SIPContact struct {
 func Parse(contact string) *SIPContact {
 	var sip_contact SIPContact
 
+	sip_contact.Paras = make(map[string]string)
+	sip_contact.Supported = make([]string, 0)
+
 	if contact == "*" {
 		sip_contact.DisName = "*"
 		return &sip_contact
@@ -62,9 +65,6 @@ func parseParams(params string, contact *SIPContact) {
 	if params == "" {
 		return
 	}
-
-	contact.Paras = make(map[string]string)
-	contact.Supported = make([]string, 0)
 
 	for _, kvs := range strings.Split(params, ";") {
 		kv := strings.SplitN(kvs, "=", 2)

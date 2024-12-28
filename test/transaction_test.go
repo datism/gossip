@@ -2,6 +2,8 @@ package test
 
 import (
 	"gossip/message"
+	"gossip/message/cseq"
+	"gossip/message/via"
 	"gossip/transaction"
 	"reflect"
 	"testing"
@@ -12,12 +14,11 @@ func TestMakeTransactionIDFromRequest(t *testing.T) {
 		Startline: message.Startline{
 			Request: &message.Request{
 				Method:     "INVITE",
-				RequestURI: "sip:bob@biloxi.com",
 			},
 		},
-		Headers: map[string][]string{
-			"via":  {"SIP/2.0/UDP server10.biloxi.com;ttl=1;branch=123", "SIP/2.0/UDP server11.biloxi.com"},
-			"cseq": {"314159 INVITE"},
+		TopmostVia: &via.SIPVia{
+			Domain: "server10.biloxi.com",
+			Branch: "123",
 		},
 	}
 
@@ -39,15 +40,11 @@ func TestMakeTransactionIDFromRequest(t *testing.T) {
 
 func TestMakeTransactionIDFromResponse(t *testing.T) {
 	data := &message.SIPMessage{
-		Startline: message.Startline{
-			Response: &message.Response{
-				StatusCode:   200,
-				ReasonPhrase: "OK",
-			},
+		TopmostVia: &via.SIPVia{
+			Branch: "123",
 		},
-		Headers: map[string][]string{
-			"via":  {"SIP/2.0/UDP server10.biloxi.com;ttl=1;branch=123", "SIP/2.0/UDP server11.biloxi.com"},
-			"cseq": {"314159 INVITE"},
+		CSeq: &cseq.SIPCseq{
+			Method: "INVITE",
 		},
 	}
 

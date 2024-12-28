@@ -15,6 +15,9 @@ type SIPVia struct {
 
 func Parse(via string) *SIPVia {
 	var sip_via SIPVia
+
+	sip_via.Opts = make(map[string]string)
+
 	var sp_pa string
 	var sent_proto string
 	var sent_by string
@@ -65,8 +68,6 @@ func parseParams(params string, via *SIPVia) {
 	if params == "" {
 		return
 	}
-
-	via.Opts = make(map[string]string)
 
 	for _, kvs := range strings.Split(params, ";") {
 		kv := strings.SplitN(kvs, "=", 2)

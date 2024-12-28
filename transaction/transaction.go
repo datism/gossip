@@ -1,7 +1,6 @@
 package transaction
 
 import (
-	"errors"
 	"fmt"
 	"gossip/message"
 )
@@ -72,16 +71,18 @@ func MakeTransactionID(msg *message.SIPMessage) (*TransID, error) {
 			that created the transaction is INVITE.
 	*/
 
-	vias := message.GetHeader(msg, "via")
-	if vias == nil {
-		return nil, errors.New("empty via header")
-	}
-	topmostVia := vias[0]
+	// vias := message.GetHeader(msg, "via")
+	// if vias == nil {
+	// 	return nil, errors.New("empty via header")
+	// }
 
-	branch := message.GetParam(topmostVia, "branch")
-	if branch == "" {
-		return nil, errors.New("empty branch value")
-	}
+	// branch := message.GetParam(topmostVia, "branch")
+	// if branch == "" {
+	// 	return nil, errors.New("empty branch value")
+	// }
+
+	topmostVia := msg.TopmostVia
+	branch := topmostVia.Branch
 
 	if msg.Request == nil {
 		return &TransID{
@@ -97,7 +98,7 @@ func MakeTransactionID(msg *message.SIPMessage) (*TransID, error) {
 		return &TransID{
 			BranchID: branch,
 			Method:   msg.Request.Method,
-			SentBy:   message.GetValueALWS(message.GetValue(topmostVia)),
+			SentBy:   topmostVia.Domain,
 		}, nil
 	}
 }

@@ -18,6 +18,9 @@ type SIPUri struct {
 func Parse(uri string) *SIPUri {
 	var sip_uri SIPUri
 
+	sip_uri.Opts = make(map[string]string)
+	sip_uri.Headers = make(map[string]string)
+
 	var ui_hp_up_hd string
 	var hp_up_hd string
 	var up_hd string
@@ -97,13 +100,13 @@ func parse_host_port(host_port string, uri *SIPUri) {
 	colon_idx := strings.Index(host_port, ":")
 	if colon_idx == -1 {
 		uri.Domain = host_port
-		uri.Port = 5060
+		uri.Port = -1
 	} else {
 		uri.Domain = host_port[:colon_idx]
 		if port, err := strconv.Atoi(host_port[colon_idx+1:]); err == nil {
 			uri.Port = port
 		} else {
-			uri.Port = 5060
+			uri.Port = -1
 		}
 	}
 }
@@ -112,8 +115,6 @@ func parse_opts(opts string, uri *SIPUri) {
 	if opts == "" {
 		return
 	}
-
-	uri.Opts = make(map[string]string)
 
 	for _, kvs := range strings.Split(opts, ";") {
 		kv := strings.SplitN(kvs, "=", 2)
@@ -127,8 +128,6 @@ func parse_headers(headers string, uri *SIPUri) {
 	if headers == "" {
 		return
 	}
-
-	uri.Headers = make(map[string]string)
 
 	for _, kvs := range strings.Split(headers, "&") {
 		kv := strings.SplitN(kvs, "=", 2)

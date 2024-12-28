@@ -115,38 +115,39 @@ func Parse(data []byte) (*SIPMessage, error) {
 			msg.Headers[key] = append(msg.Headers[key], strings.TrimSpace(value))
 			// }
 		}
-
-		if from := GetHeader(&msg, "from"); from != nil {
-			msg.From = fromto.Parse(from[0])
-			delete(msg.Headers, "from")
-		}
-
-		if to := GetHeader(&msg, "to"); to != nil {
-			msg.To = fromto.Parse(to[0])
-			delete(msg.Headers, "to")
-		}
-
-		if callid := GetHeader(&msg, "call-id"); callid != nil {
-			msg.CallID = callid[0]
-			delete(msg.Headers, "call-id")
-		}
-
-		if cseq_hdr := GetHeader(&msg, "cseq"); cseq_hdr != nil {
-			msg.CSeq = cseq.Parse(cseq_hdr[0])
-			delete(msg.Headers, "cseq")
-		}
-
-		if contacts := GetHeader(&msg, "contact"); contacts != nil {
-			msg.Contacts = make([]*contact.SIPContact, 0)
-			for _, cont := range contacts {
-				msg.Contacts = append(msg.Contacts, contact.Parse(cont))
-			}
-			delete(msg.Headers, "contact")
-		}
-
-		msg.TopmostVia = via.Parse(msg.Headers["via"][0])
-		msg.Headers["via"] = msg.Headers["via"][1:]
 	}
+
+	
+	if from := GetHeader(&msg, "from"); from != nil {
+		msg.From = fromto.Parse(from[0])
+		delete(msg.Headers, "from")
+	}
+
+	if to := GetHeader(&msg, "to"); to != nil {
+		msg.To = fromto.Parse(to[0])
+		delete(msg.Headers, "to")
+	}
+
+	if callid := GetHeader(&msg, "call-id"); callid != nil {
+		msg.CallID = callid[0]
+		delete(msg.Headers, "call-id")
+	}
+
+	if cseq_hdr := GetHeader(&msg, "cseq"); cseq_hdr != nil {
+		msg.CSeq = cseq.Parse(cseq_hdr[0])
+		delete(msg.Headers, "cseq")
+	}
+
+	if contacts := GetHeader(&msg, "contact"); contacts != nil {
+		msg.Contacts = make([]*contact.SIPContact, 0)
+		for _, cont := range contacts {
+			msg.Contacts = append(msg.Contacts, contact.Parse(cont))
+		}
+		delete(msg.Headers, "contact")
+	}
+
+	msg.TopmostVia = via.Parse(msg.Headers["via"][0])
+	msg.Headers["via"] = msg.Headers["via"][1:]
 
 	// Read body
 	body, err := io.ReadAll(reader)
