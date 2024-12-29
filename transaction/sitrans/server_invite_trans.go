@@ -1,136 +1,162 @@
 package sitrans
 
-// import (
-// 	"gossip/message"
-// 	"gossip/transaction"
-// 	"gossip/transport"
-// 	"gossip/util"
-// )
+import (
+	"gossip/event"
+	"gossip/message"
+	"gossip/transaction"
+	"gossip/util"
+)
 
-// const T1 = 500
-// const T2 = 4000
+const T1 = 500
+const T2 = 4000
+const T4 = 5000
 
-// const tiprv_dur = 200
-// const tih_dur = 64 * T1
-// const tig_dur = T1
+const tiprv_dur = 200
+const tig_dur = T1
+const tih_dur = 64 * T1
+const tii_dur = T4
 
-// const (
-// 	timer_prv = iota
-// 	timer_h
-// 	timer_g
-// )
+const (
+	timer_prv = iota
+	timer_g
+	timer_h
+	timer_i
+)
 
-// type state int
+type state int
 
-// const (
-// 	proceeding state = iota
-// 	completed
-// 	confirmed
-// 	terminated
-// )
+const (
+	proceeding state = iota
+	completed
+	confirmed
+	terminated
+)
 
-// type context struct {
-// 	recvc     chan transaction.Event
-// 	sendc     chan transaction.Event
-// 	timers    [3]util.Timer
-// 	mess      *message.SIPMessage
-// 	last_res  *message.SIPMessage
-// 	transport *transport.Transport
-// 	state     state
-// }
+type Sitrans struct {
+	state    state
+	message  *message.SIPMessage
+	last_res *message.SIPMessage
+	timers   [4]util.Timer
+	transc   chan event.Event
+	trpt_cb  func(transaction.Transaction, event.Event)
+	core_cb  func(transaction.Transaction, event.Event)
+}
 
-// func Start(trans *transaction.Transaction, transport *transport.Transport, message *message.SIPMessage) {
-// 	ctx := sinit(trans, transport, message)
+func Make(
+	message *message.SIPMessage,
+	transport_callback func(transaction.Transaction, event.Event),
+	core_callback func(transaction.Transaction, event.Event),
+) *Sitrans {
+	timerprv := util.NewTimer()
+	timerg := util.NewTimer()
+	timerdh := util.NewTimer()
+	timeri := util.NewTimer()
 
-// 	var event transaction.Event
-// 	ctx.sendc <- transaction.Event{Type: transaction.RECV, Data: message}
-// 	ctx.timers[timer_prv].Start(tiprv_dur)
+	return &Sitrans{
+		message: message,
+		transc:  make(chan event.Event),
+		timers:  [4]util.Timer{timerprv, timerg, timerdh, timeri},
+		state:   proceeding,
+		trpt_cb: transport_callback,
+		core_cb: core_callback,
+	}
+}
 
-// 	for {
-// 		select {
-// 		case event = <-ctx.recvc:
-// 		case event = <-ctx.sendc:
-// 		case <-ctx.timers[timer_prv].Chan():
-// 			event = transaction.Event{Type: transaction.TIMER, Data: timer_prv}
-// 		case <-ctx.timers[timer_g].Chan():
-// 			event = transaction.Event{Type: transaction.TIMER, Data: timer_g}
-// 		case <-ctx.timers[timer_h].Chan():
-// 			event = transaction.Event{Type: transaction.TIMER, Data: timer_h}
-// 		}
+func (trans Sitrans) Send(event event.Event) {
+	trans.transc <- event
+}
 
-// 		handle_event(ctx, event)
-// 		if ctx.state == terminated {
-// 			break
-// 		}
-// 	}
+func (trans *Sitrans) Start() {
+	go trans.start()
+}
 
-// }
+func (ctx *Sitrans) start() {
+	ctx.timers[timer_prv].Start(tiprv_dur)
+	call_core_callback(ctx, event.Event{Type: event.RECV, Data: ctx.message})
 
-// func sinit(trans *transaction.Transaction, transport *transport.Transport, message *message.SIPMessage) *context {
-// 	timera := util.NewTimer()
-// 	timerb := util.NewTimer()
-// 	timerd := util.NewTimer()
+	var ev event.Event
 
-// 	return &context{
-// 		recvc:     trans.SendChannel,
-// 		sendc:     trans.RecvChannel,
-// 		timers:    [3]util.Timer{timera, timerb, timerd},
-// 		mess:      message,
-// 		transport: transport,
-// 		state:     proceeding,
-// 	}
-// }
+	for {
+		select {
+		case ev = <-ctx.transc:
+		case <-ctx.timers[timer_prv].Chan():
+			ev = event.Event{Type: event.TIMEOUT, Data: timer_prv}
+		case <-ctx.timers[timer_g].Chan():
+			ev = event.Event{Type: event.TIMEOUT, Data: timer_g}
+		case <-ctx.timers[timer_h].Chan():
+			ev = event.Event{Type: event.TIMEOUT, Data: timer_h}
+		}
 
-// func handle_event(ctx *context, event transaction.Event) {
-// 	switch event.Type {
-// 	case transaction.TIMER:
-// 		handle_timer(ctx, event)
-// 	case transaction.RECV:
-// 		handle_recv_msg(ctx, event)
-// 	default:
-// 		return
-// 	}
-// }
+		ctx.handle_event(ev)
+		if ctx.state == terminated {
+			break
+		}
+	}
 
-// func handle_timer(ctx *context, event transaction.Event) {
-// 	if event.Data == timer_h {
-// 		ctx.sendc <- transaction.Event{Type: transaction.TIMER, Data: "timeout"}
-// 		ctx.state = terminated
-// 	} else if event.Data == timer_prv && ctx.state == proceeding {
-// 		trying100 := message.MakeGenericResponse(100, "TRYING", ctx.mess)
-// 		transport.Send(ctx.transport, trying100)
-// 	} else if event.Data == timer_g && ctx.state == completed {
-// 		transport.Send(ctx.transport, ctx.last_res)
-// 		ctx.timers[timer_g].Start(min(2*ctx.timers[timer_g].Duration(), T2))
-// 	}
-// }
+}
 
-// func handle_recv_msg(ctx *context, event transaction.Event) {
-// 	msg, ok := event.Data.(*message.SIPMessage)
-// 	if !ok {
-// 		return
-// 	}
+func (ctx *Sitrans) handle_event(ev event.Event) {
+	switch ev.Type {
+	case event.TIMEOUT:
+		ctx.handle_timer(ev)
+	case event.RECV:
+		ctx.handle_recv_msg(ev)
+	default:
+		return
+	}
+}
 
-// 	if msg.Response == nil {
-// 		if msg.Request.Method == "ACK" && ctx.state == completed {
-// 			ctx.state = terminated
-// 		}
-// 		return
-// 	}
+func (trans *Sitrans) handle_timer(ev event.Event) {
+	if ev.Data == timer_h {
+		call_core_callback(trans, event.Event{Type: event.TIMEOUT, Data: timer_h})
+		trans.state = terminated
+	} else if ev.Data == timer_prv && trans.state == proceeding {
+		trying100 := message.MakeGenericResponse(100, "TRYING", trans.message)
+		call_transport_callback(trans, event.Event{Type: event.SEND, Data: trying100})
+	} else if ev.Data == timer_g && trans.state == completed {
+		call_transport_callback(trans, event.Event{Type: event.SEND, Data: trans.last_res})
+		trans.timers[timer_g].Start(min(2*trans.timers[timer_g].Duration(), T2))
+	} else if ev.Data == timer_i && trans.state == confirmed {
+		trans.state = terminated
+	}
+}
 
-// 	status_code := msg.Response.StatusCode
-// 	if status_code >= 100 && status_code < 200 && ctx.state == proceeding {
-// 		ctx.timers[timer_prv].Stop()
-// 		transport.Send(ctx.transport, msg)
-// 	} else if status_code >= 200 && status_code <= 300 && ctx.state == proceeding {
-// 		ctx.timers[timer_prv].Stop()
-// 		transport.Send(ctx.transport, msg)
-// 		ctx.state = terminated
-// 	} else if status_code > 300 {
-// 		transport.Send(ctx.transport, msg)
-// 		ctx.timers[timer_g].Start(tig_dur)
-// 		ctx.timers[timer_h].Start(tih_dur)
-// 		ctx.last_res = msg
-// 		ctx.state = completed
-// 	}
-// }
+func (trans *Sitrans) handle_recv_msg(ev event.Event) {
+	msg, ok := ev.Data.(*message.SIPMessage)
+	if !ok {
+		return
+	}
+
+	if msg.Response == nil {
+		if msg.Request.Method == "ACK" && trans.state == completed {
+			trans.timers[timer_g].Stop()
+			trans.timers[timer_h].Stop()
+			trans.timers[timer_i].Start(tii_dur)
+			trans.state = confirmed
+		}
+		return
+	}
+
+	status_code := msg.Response.StatusCode
+	if status_code >= 100 && status_code < 200 && trans.state == proceeding {
+		trans.timers[timer_prv].Stop()
+		call_transport_callback(trans, event.Event{Type: event.SEND, Data: msg})
+	} else if status_code >= 200 && status_code <= 300 && trans.state == proceeding {
+		call_transport_callback(trans, event.Event{Type: event.SEND, Data: msg})
+		trans.state = terminated
+	} else if status_code > 300 {
+		call_transport_callback(trans, event.Event{Type: event.SEND, Data: msg})
+		trans.timers[timer_g].Start(tig_dur)
+		trans.timers[timer_h].Start(tih_dur)
+		trans.last_res = msg
+		trans.state = completed
+	}
+}
+
+func call_core_callback(sitrans *Sitrans, ev event.Event) {
+	go sitrans.core_cb(sitrans, ev)
+}
+
+func call_transport_callback(sitrans *Sitrans, ev event.Event) {
+	go sitrans.trpt_cb(sitrans, ev)
+}
