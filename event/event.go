@@ -3,8 +3,7 @@ package event
 type EventType int
 
 const (
-	RECV = iota
-	SEND
+	MESS = iota
 	TIMEOUT
 	ERROR
 )
