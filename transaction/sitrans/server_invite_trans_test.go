@@ -38,7 +38,7 @@ func TestNormalScenario(t *testing.T) {
 
 	// 1. invite -> proceeding (send inv to core)
 	trans.Start()
-	assertCallback(t, coreCallbackChan, event.Event{Type: event.RECV, Data: inviteMessage})
+	assertCallback(t, coreCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
 	assertState(t, trans.state, proceeding)
 
 	// 2. 100 -> proceeding (send 100 to transport)
@@ -49,8 +49,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Send(event.Event{Type: event.RECV, Data: trying100})
-	assertCallback(t, mockTransportCallback, event.Event{Type: event.RECV, Data: trying100})
+	trans.Event(event.Event{Type: event.MESS, Data: trying100})
+	assertCallback(t, mockTransportCallback, event.Event{Type: event.MESS, Data: trying100})
 	assertState(t, trans.state, proceeding)
 
 	// 3. 183 -> proceeding (send 183 to transport)
@@ -61,8 +61,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Send(event.Event{Type: event.RECV, Data: proceeding183})
-	assertCallback(t, mockTransportCallback, event.Event{Type: event.RECV, Data: proceeding183})
+	trans.Event(event.Event{Type: event.MESS, Data: proceeding183})
+	assertCallback(t, mockTransportCallback, event.Event{Type: event.MESS, Data: proceeding183})
 	assertState(t, trans.state, proceeding)
 
 	// 4. 180 -> proceeding (send 180 to transport)
@@ -73,8 +73,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Send(event.Event{Type: event.RECV, Data: ringing180})
-	assertCallback(t, mockTransportCallback, event.Event{Type: event.RECV, Data: ringing180})
+	trans.Event(event.Event{Type: event.MESS, Data: ringing180})
+	assertCallback(t, mockTransportCallback, event.Event{Type: event.MESS, Data: ringing180})
 	assertState(t, trans.state, proceeding)
 
 	// 5. 200 -> terminated (send 200 to transport)
@@ -85,8 +85,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Send(event.Event{Type: event.RECV, Data: ok200})
-	assertCallback(t, mockTransportCallback, event.Event{Type: event.RECV, Data: ok200})
+	trans.Event(event.Event{Type: event.MESS, Data: ok200})
+	assertCallback(t, mockTransportCallback, event.Event{Type: event.MESS, Data: ok200})
 	assertState(t, trans.state, terminated)
 }
 
@@ -119,7 +119,7 @@ func TestErrorResponse(t *testing.T) {
 
 	// 1. invite -> proceeding (send inv to core)
 	trans.Start()
-	assertCallback(t, mockCoreCallback, event.Event{Type: event.RECV, Data: inviteMessage})
+	assertCallback(t, mockCoreCallback, event.Event{Type: event.MESS, Data: inviteMessage})
 	assertState(t, trans.state, calling)
 
 	// 2. 100 -> proceeding (send 100 to transport)
@@ -130,8 +130,8 @@ func TestErrorResponse(t *testing.T) {
 			},
 		},
 	}
-	trans.Send(event.Event{Type: event.RECV, Data: trying100})
-	assertCallback(t, mockTransportCallback, event.Event{Type: event.RECV, Data: trying100})
+	trans.Event(event.Event{Type: event.MESS, Data: trying100})
+	assertCallback(t, mockTransportCallback, event.Event{Type: event.MESS, Data: trying100})
 	assertState(t, trans.state, proceeding)
 
 	// 3. 3xx -> completed (send 3xx to transport)
@@ -142,8 +142,8 @@ func TestErrorResponse(t *testing.T) {
 			},
 		},
 	}
-	trans.Send(event.Event{Type: event.RECV, Data: notfound404})
-	assertCallback(t, mockTransportCallback, event.Event{Type: event.RECV, Data: notfound404})
+	trans.Event(event.Event{Type: event.MESS, Data: notfound404})
+	assertCallback(t, mockTransportCallback, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 4. ACK -> confirmed
@@ -154,7 +154,7 @@ func TestErrorResponse(t *testing.T) {
 			},
 		},
 	}
-	trans.Send(event.Event{Type: event.RECV, Data: ack})
+	trans.Event(event.Event{Type: event.MESS, Data: ack})
 	assertState(t, trans.state, confirmed)
 
 	// 5. timer i -> terminated
@@ -192,7 +192,7 @@ func TestTimeoutTimer(t *testing.T) {
 
 	// 1. invite -> calling (send invite to core)
 	trans.Start()
-	assertCallback(t, mockCoreCallback, event.Event{Type: event.RECV, Data: invite})
+	assertCallback(t, mockCoreCallback, event.Event{Type: event.MESS, Data: invite})
 	assertState(t, trans.state, proceeding)
 
 	// 2. timer prv -> proceeding (send 100 to transport)
@@ -205,7 +205,7 @@ func TestTimeoutTimer(t *testing.T) {
 		},
 	}
   sleep(tiprv_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: trying100})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: trying100})
 	assertState(t, trans.state, proceeding)
 
   // 3. 3xx -> completed (send 3xx to transport)
@@ -216,63 +216,63 @@ func TestTimeoutTimer(t *testing.T) {
 			},
 		},
 	}
-	trans.Send(event.Event{Type: event.RECV, Data: notfound404})
-	assertCallback(t, mockTransportCallback, event.Event{Type: event.RECV, Data: notfound404})
+	trans.Event(event.Event{Type: event.MESS, Data: notfound404})
+	assertCallback(t, mockTransportCallback, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
   // 4. invite -> completed (send 300 to transport)
-  trans.Send(event.Event{Type: event.RECV, Data: invite})
-	assertCallback(t, mockTransportCallback, event.Event{Type: event.RECV, Data: notfound404})
+  trans.Event(event.Event{Type: event.MESS, Data: invite})
+	assertCallback(t, mockTransportCallback, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 5. timer g -> completed (send 300 to transport) 
 	sleep(tig_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 6. timer g -> completed (send 300 to transport)
 	sleep(2 * tig_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 7. timer g -> completed (send 300 to transport)
 	sleep(4 * tig_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 8. timer g -> completed (send 300 to transport)
 	sleep(T2)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
   // 9. timer g -> completed (send 300 to transport)
 	sleep(T2)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
   // 10. timer g -> completed (send 300 to transport)
 	sleep(T2)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
   // 11. timer g -> completed (send 300 to transport)
 	sleep(T2)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
   // 12. timer g -> completed (send 300 to transport)
 	sleep(T2)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
   // 13. timer g -> completed (send 300 to transport)
 	sleep(T2)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
   // 14. timer g -> completed (send 300 to transport)
 	sleep(T2)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 15. timer h -> termiated (send timeout to core)
