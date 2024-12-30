@@ -22,7 +22,7 @@ func HandleMessage(transport *transport.Transport, msg *message.SIPMessage) {
 
 	if trans := FindTransaction(tid); trans != nil {
 		log.Debug().Msg("Found transaction")
-		trans.Send(event.Event{Type: event.RECV, Data: msg})
+		trans.Event(event.Event{Type: event.MESS, Data: msg})
 	} else {
 		if msg.Request != nil {
 			log.Error().Msg("Cannot start new transaction with response")

@@ -7,15 +7,15 @@ import (
 	"gossip/util"
 )
 
-const T1 = 500
-const tia_dur = T1
-const tib_dur = 64 * T1
+const t1 = 500
+const tia_dur = t1
+const tib_dur = 64 * t1
 const tid_dur = 32000
 
 const (
-	TIMERA = iota
-	TIMERB
-	TIMERD
+	timer_a = iota
+	timer_b
+	timer_d
 )
 
 type state int
@@ -65,20 +65,20 @@ func (trans *Citrans) Start() {
 
 func (trans *Citrans) start() {
 	call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.message})
-	trans.timers[TIMERA].Start(tia_dur)
-	trans.timers[TIMERB].Start(tib_dur)
+	trans.timers[timer_a].Start(tia_dur)
+	trans.timers[timer_b].Start(tib_dur)
 
 	var ev event.Event
 
 	for {
 		select {
 		case ev = <-trans.transc:
-		case <-trans.timers[TIMERA].Chan():
-			ev = event.Event{Type: event.TIMEOUT, Data: TIMERA}
-		case <-trans.timers[TIMERB].Chan():
-			ev = event.Event{Type: event.TIMEOUT, Data: TIMERB}
-		case <-trans.timers[TIMERD].Chan():
-			ev = event.Event{Type: event.TIMEOUT, Data: TIMERD}
+		case <-trans.timers[timer_a].Chan():
+			ev = event.Event{Type: event.TIMEOUT, Data: timer_a}
+		case <-trans.timers[timer_b].Chan():
+			ev = event.Event{Type: event.TIMEOUT, Data: timer_b}
+		case <-trans.timers[timer_d].Chan():
+			ev = event.Event{Type: event.TIMEOUT, Data: timer_d}
 		}
 
 		trans.handle_event(ev)
@@ -102,13 +102,13 @@ func (trans *Citrans) handle_event(ev event.Event) {
 }
 
 func (trans *Citrans) handle_timer(ev event.Event) {
-	if ev.Data == TIMERB {
-		call_core_callback(trans, event.Event{Type: event.TIMEOUT, Data: TIMERB})
+	if ev.Data == timer_b {
+		call_core_callback(trans, event.Event{Type: event.TIMEOUT, Data: trans.message})
 		trans.state = terminated
-	} else if ev.Data == TIMERA && trans.state == calling {
+	} else if ev.Data == timer_a && trans.state == calling {
 		call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.message})
-		trans.timers[TIMERA].Start(trans.timers[TIMERA].Duration() * 2)
-	} else if ev.Data == TIMERD && trans.state == completed {
+		trans.timers[timer_a].Start(trans.timers[timer_a].Duration() * 2)
+	} else if ev.Data == timer_d && trans.state == completed {
 		trans.state = terminated
 	}
 }
@@ -122,7 +122,7 @@ func (trans *Citrans) handle_recv_msg(ev event.Event) {
 	status_code := response.Response.StatusCode
 	if status_code >= 100 && status_code < 200 {
 		if trans.state == calling {
-			trans.timers[TIMERA].Stop()
+			trans.timers[timer_a].Stop()
 			call_core_callback(trans, ev)
 			trans.state = proceeding
 		} else if trans.state == proceeding {
@@ -137,8 +137,8 @@ func (trans *Citrans) handle_recv_msg(ev event.Event) {
 			ack := message.MakeGenericAck(trans.message, response)
 			call_transport_callback(trans, event.Event{Type: event.MESS, Data: ack})
 
-			trans.timers[TIMERB].Stop()
-			trans.timers[TIMERD].Start(tid_dur)
+			trans.timers[timer_b].Stop()
+			trans.timers[timer_d].Start(tid_dur)
 			trans.state = completed
 		} else if trans.state == completed {
 			ack := message.MakeGenericAck(trans.message, response)

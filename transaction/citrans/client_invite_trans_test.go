@@ -12,8 +12,8 @@ import (
 
 func TestNormalScenario(t *testing.T) {
 	// Channels to capture callback invocations
-	transportCallbackChan := make(chan event.Event, 3)
-	coreCallbackChan := make(chan event.Event, 3)
+	transportCallbackChan := make(chan event.Event, 1)
+	coreCallbackChan := make(chan event.Event, 1)
 
 	// Create a mock transport callback
 	mockTransportCallback := func(trans transaction.Transaction, ev event.Event) {
@@ -26,7 +26,7 @@ func TestNormalScenario(t *testing.T) {
 	}
 
 	// Create a dummy SIP Message
-	inviteMessage := &message.SIPMessage{
+	invite := &message.SIPMessage{
 		Startline: message.Startline{
 			Request: &message.Request{
 				Method: "INVITE",
@@ -35,11 +35,11 @@ func TestNormalScenario(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(inviteMessage, mockTransportCallback, mockCoreCallback)
+	trans := Make(invite, mockTransportCallback, mockCoreCallback)
 
 	// 1. invite -> calling (send invite to transport)
 	trans.Start()
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: invite})
 	assertState(t, trans.state, calling)
 
 	// 2. 100 -> proceeding (send 100 to core)
@@ -91,74 +91,6 @@ func TestNormalScenario(t *testing.T) {
 	assertState(t, trans.state, terminated)
 }
 
-func TestTimeoutTimer(t *testing.T) {
-	// Channels to capture callback invocations
-	transportCallbackChan := make(chan event.Event, 3)
-	coreCallbackChan := make(chan event.Event, 3)
-
-	// Create a mock transport callback
-	mockTransportCallback := func(trans transaction.Transaction, ev event.Event) {
-		transportCallbackChan <- ev
-	}
-
-	// Create a mock core callback
-	mockCoreCallback := func(trans transaction.Transaction, ev event.Event) {
-		coreCallbackChan <- ev
-	}
-
-	// Create a dummy SIP Message
-	inviteMessage := &message.SIPMessage{
-		Startline: message.Startline{
-			Request: &message.Request{
-				Method: "INVITE",
-			},
-		},
-	}
-
-	// Create a new Citrans instance
-	trans := Make(inviteMessage, mockTransportCallback, mockCoreCallback)
-
-	// 1. invite -> calling (send invite to transport)
-	trans.Start()
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
-	assertState(t, trans.state, calling)
-
-	// 2. timer a  (send invite to transport)
-	sleep(tia_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
-	assertState(t, trans.state, calling)
-
-	// 3. timer a  (send invite to transport)
-	sleep(2 * tia_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
-	assertState(t, trans.state, calling)
-
-	// 4. timer a  (send invite to transport)
-	sleep(4 * tia_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
-	assertState(t, trans.state, calling)
-
-	// 5. timer a (send invite to transport)
-	sleep(8 * tia_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
-	assertState(t, trans.state, calling)
-
-	// 6. timer a (send invite to transport)
-	sleep(16 * tia_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
-	assertState(t, trans.state, calling)
-
-	// 7. timer a - 6 (send invite to transport)
-	sleep(32 * tia_dur)
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
-	assertState(t, trans.state, calling)
-
-	// 8. timer b -> terminated (send timeout to core)
-	sleep(500)
-	assertCallback(t, coreCallbackChan, event.Event{Type: event.TIMEOUT, Data: TIMERB})
-	assertState(t, trans.state, terminated)
-}
-
 func TestErrorResponse(t *testing.T) {
 	// Channels to capture callback invocations
 	transportCallbackChan := make(chan event.Event, 1)
@@ -175,7 +107,7 @@ func TestErrorResponse(t *testing.T) {
 	}
 
 	// Create a dummy SIP Message
-	inviteMessage := &message.SIPMessage{
+	invite := &message.SIPMessage{
 		Startline: message.Startline{
 			Request: &message.Request{
 				Method: "INVITE",
@@ -188,11 +120,11 @@ func TestErrorResponse(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(inviteMessage, mockTransportCallback, mockCoreCallback)
+	trans := Make(invite, mockTransportCallback, mockCoreCallback)
 
 	// 1. invite -> calling (send invite to transport)
 	trans.Start()
-	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: inviteMessage})
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: invite})
 	assertState(t, trans.state, calling)
 
 	// 2. 100 -> proceeding (send 100 to core)
@@ -217,7 +149,7 @@ func TestErrorResponse(t *testing.T) {
 	}
 	trans.Event(event.Event{Type: event.MESS, Data: notfound404})
 	assertCallback(t, coreCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
-	ack404 := message.MakeGenericAck(inviteMessage, notfound404)
+	ack404 := message.MakeGenericAck(invite, notfound404)
 	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: ack404})
 	assertState(t, trans.state, completed)
 
@@ -229,6 +161,74 @@ func TestErrorResponse(t *testing.T) {
 	// 5. timer d -> terminated
 	sleep(tid_dur)
 	sleep(100)
+	assertState(t, trans.state, terminated)
+}
+
+func TestTimeoutTimer(t *testing.T) {
+	// Channels to capture callback invocations
+	transportCallbackChan := make(chan event.Event, 1)
+	coreCallbackChan := make(chan event.Event, 1)
+
+	// Create a mock transport callback
+	mockTransportCallback := func(trans transaction.Transaction, ev event.Event) {
+		transportCallbackChan <- ev
+	}
+
+	// Create a mock core callback
+	mockCoreCallback := func(trans transaction.Transaction, ev event.Event) {
+		coreCallbackChan <- ev
+	}
+
+	// Create a dummy SIP Message
+	invite := &message.SIPMessage{
+		Startline: message.Startline{
+			Request: &message.Request{
+				Method: "INVITE",
+			},
+		},
+	}
+
+	// Create a new Citrans instance
+	trans := Make(invite, mockTransportCallback, mockCoreCallback)
+
+	// 1. invite -> calling (send invite to transport)
+	trans.Start()
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: invite})
+	assertState(t, trans.state, calling)
+
+	// 2. timer a  (send invite to transport)
+	sleep(tia_dur)
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: invite})
+	assertState(t, trans.state, calling)
+
+	// 3. timer a  (send invite to transport)
+	sleep(2 * tia_dur)
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: invite})
+	assertState(t, trans.state, calling)
+
+	// 4. timer a  (send invite to transport)
+	sleep(4 * tia_dur)
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: invite})
+	assertState(t, trans.state, calling)
+
+	// 5. timer a (send invite to transport)
+	sleep(8 * tia_dur)
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: invite})
+	assertState(t, trans.state, calling)
+
+	// 6. timer a (send invite to transport)
+	sleep(16 * tia_dur)
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: invite})
+	assertState(t, trans.state, calling)
+
+	// 7. timer a - 6 (send invite to transport)
+	sleep(32 * tia_dur)
+	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: invite})
+	assertState(t, trans.state, calling)
+
+	// 8. timer b -> terminated (send timeout to core)
+	sleep(500)
+	assertCallback(t, coreCallbackChan, event.Event{Type: event.TIMEOUT, Data: invite})
 	assertState(t, trans.state, terminated)
 }
 

@@ -7,14 +7,14 @@ import (
 	"gossip/util"
 )
 
-const T1 = 500
-const T2 = 4000
-const T4 = 5000
+const t1 = 500
+const t2 = 4000
+const t4 = 5000
 
 const tiprv_dur = 200
-const tig_dur = T1
-const tih_dur = 64 * T1
-const tii_dur = T4
+const tig_dur = t1
+const tih_dur = 64 * t1
+const tii_dur = t4
 
 const (
 	timer_prv = iota
@@ -70,25 +70,27 @@ func (trans *Sitrans) Start() {
 	go trans.start()
 }
 
-func (ctx *Sitrans) start() {
-	ctx.timers[timer_prv].Start(tiprv_dur)
-	call_core_callback(ctx, event.Event{Type: event.MESS, Data: ctx.message})
+func (trans *Sitrans) start() {
+	trans.timers[timer_prv].Start(tiprv_dur)
+	call_core_callback(trans, event.Event{Type: event.MESS, Data: trans.message})
 
 	var ev event.Event
 
 	for {
 		select {
-		case ev = <-ctx.transc:
-		case <-ctx.timers[timer_prv].Chan():
+		case ev = <-trans.transc:
+		case <-trans.timers[timer_prv].Chan():
 			ev = event.Event{Type: event.TIMEOUT, Data: timer_prv}
-		case <-ctx.timers[timer_g].Chan():
+		case <-trans.timers[timer_g].Chan():
 			ev = event.Event{Type: event.TIMEOUT, Data: timer_g}
-		case <-ctx.timers[timer_h].Chan():
+		case <-trans.timers[timer_h].Chan():
 			ev = event.Event{Type: event.TIMEOUT, Data: timer_h}
+		case <-trans.timers[timer_i].Chan():
+			ev = event.Event{Type: event.TIMEOUT, Data: timer_i}
 		}
 
-		ctx.handle_event(ev)
-		if ctx.state == terminated {
+		trans.handle_event(ev)
+		if trans.state == terminated {
 			break
 		}
 	}
@@ -100,7 +102,7 @@ func (ctx *Sitrans) handle_event(ev event.Event) {
 	case event.TIMEOUT:
 		ctx.handle_timer(ev)
 	case event.MESS:
-		ctx.handle_recv_msg(ev)
+		ctx.handle_msg(ev)
 	default:
 		return
 	}
@@ -108,32 +110,37 @@ func (ctx *Sitrans) handle_event(ev event.Event) {
 
 func (trans *Sitrans) handle_timer(ev event.Event) {
 	if ev.Data == timer_h {
-		call_core_callback(trans, event.Event{Type: event.TIMEOUT, Data: timer_h})
+		call_core_callback(trans, event.Event{Type: event.TIMEOUT, Data: trans.message})
 		trans.state = terminated
 	} else if ev.Data == timer_prv && trans.state == proceeding {
 		trying100 := message.MakeGenericResponse(100, "TRYING", trans.message)
 		call_transport_callback(trans, event.Event{Type: event.MESS, Data: trying100})
 	} else if ev.Data == timer_g && trans.state == completed {
 		call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.last_res})
-		trans.timers[timer_g].Start(min(2*trans.timers[timer_g].Duration(), T2))
+		trans.timers[timer_g].Start(min(2*trans.timers[timer_g].Duration(), t2))
 	} else if ev.Data == timer_i && trans.state == confirmed {
 		trans.state = terminated
 	}
 }
 
-func (trans *Sitrans) handle_recv_msg(ev event.Event) {
+func (trans *Sitrans) handle_msg(ev event.Event) {
 	msg, ok := ev.Data.(*message.SIPMessage)
 	if !ok {
 		return
 	}
 
-	if msg.Response == nil {
+	if msg.Request != nil {
 		if msg.Request.Method == "ACK" && trans.state == completed {
 			trans.timers[timer_g].Stop()
 			trans.timers[timer_h].Stop()
 			trans.timers[timer_i].Start(tii_dur)
 			trans.state = confirmed
 		}
+
+		if msg.Request.Method == "INVITE" && trans.state == completed {
+			call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.last_res})
+		}
+
 		return
 	}
 
