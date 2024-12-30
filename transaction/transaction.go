@@ -27,7 +27,7 @@ func (tid TransID) String() string {
 }
 
 type Transaction interface {
-	Send(event event.Event)
+	Event(event event.Event)
 	Start()
 }
 
