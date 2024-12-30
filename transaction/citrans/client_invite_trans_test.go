@@ -50,8 +50,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(event.Event{Type: event.RECV, Data: trying100})
-	assertCallback(t, coreCallbackChan, event.Event{Type: event.RECV, Data: trying100})
+	trans.Event(event.Event{Type: event.MESS, Data: trying100})
+	assertCallback(t, coreCallbackChan, event.Event{Type: event.MESS, Data: trying100})
 	assertState(t, trans.state, proceeding)
 
 	// 3. 183 -> proceeding (send 183 to core)
@@ -62,8 +62,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(event.Event{Type: event.RECV, Data: proceeding183})
-	assertCallback(t, coreCallbackChan, event.Event{Type: event.RECV, Data: proceeding183})
+	trans.Event(event.Event{Type: event.MESS, Data: proceeding183})
+	assertCallback(t, coreCallbackChan, event.Event{Type: event.MESS, Data: proceeding183})
 	assertState(t, trans.state, proceeding)
 
 	// 4. 180 -> proceeding (send 180 to core)
@@ -74,8 +74,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(event.Event{Type: event.RECV, Data: ringing180})
-	assertCallback(t, coreCallbackChan, event.Event{Type: event.RECV, Data: ringing180})
+	trans.Event(event.Event{Type: event.MESS, Data: ringing180})
+	assertCallback(t, coreCallbackChan, event.Event{Type: event.MESS, Data: ringing180})
 	assertState(t, trans.state, proceeding)
 
 	// 5. 200 -> terminated (send 200 to core)
@@ -86,8 +86,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(event.Event{Type: event.RECV, Data: ok200})
-	assertCallback(t, coreCallbackChan, event.Event{Type: event.RECV, Data: ok200})
+	trans.Event(event.Event{Type: event.MESS, Data: ok200})
+	assertCallback(t, coreCallbackChan, event.Event{Type: event.MESS, Data: ok200})
 	assertState(t, trans.state, terminated)
 }
 
@@ -203,8 +203,8 @@ func TestErrorResponse(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(event.Event{Type: event.RECV, Data: trying100})
-	assertCallback(t, coreCallbackChan, event.Event{Type: event.RECV, Data: trying100})
+	trans.Event(event.Event{Type: event.MESS, Data: trying100})
+	assertCallback(t, coreCallbackChan, event.Event{Type: event.MESS, Data: trying100})
 	assertState(t, trans.state, proceeding)
 
 	// 3. 3xx -> completed (send ack to transport + send 3xx to core)
@@ -215,14 +215,14 @@ func TestErrorResponse(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(event.Event{Type: event.RECV, Data: notfound404})
-	assertCallback(t, coreCallbackChan, event.Event{Type: event.RECV, Data: notfound404})
+	trans.Event(event.Event{Type: event.MESS, Data: notfound404})
+	assertCallback(t, coreCallbackChan, event.Event{Type: event.MESS, Data: notfound404})
 	ack404 := message.MakeGenericAck(inviteMessage, notfound404)
 	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: ack404})
 	assertState(t, trans.state, completed)
 
 	// 4. 3xx -> completed (send ack to transport)
-	trans.Event(event.Event{Type: event.RECV, Data: notfound404})
+	trans.Event(event.Event{Type: event.MESS, Data: notfound404})
 	assertCallback(t, transportCallbackChan, event.Event{Type: event.MESS, Data: ack404})
 	assertState(t, trans.state, completed)
 
