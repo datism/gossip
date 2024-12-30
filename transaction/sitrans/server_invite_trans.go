@@ -62,7 +62,7 @@ func Make(
 	}
 }
 
-func (trans Sitrans) Send(event event.Event) {
+func (trans Sitrans) Event(event event.Event) {
 	trans.transc <- event
 }
 
@@ -72,7 +72,7 @@ func (trans *Sitrans) Start() {
 
 func (ctx *Sitrans) start() {
 	ctx.timers[timer_prv].Start(tiprv_dur)
-	call_core_callback(ctx, event.Event{Type: event.RECV, Data: ctx.message})
+	call_core_callback(ctx, event.Event{Type: event.MESS, Data: ctx.message})
 
 	var ev event.Event
 
@@ -99,7 +99,7 @@ func (ctx *Sitrans) handle_event(ev event.Event) {
 	switch ev.Type {
 	case event.TIMEOUT:
 		ctx.handle_timer(ev)
-	case event.RECV:
+	case event.MESS:
 		ctx.handle_recv_msg(ev)
 	default:
 		return
@@ -112,9 +112,9 @@ func (trans *Sitrans) handle_timer(ev event.Event) {
 		trans.state = terminated
 	} else if ev.Data == timer_prv && trans.state == proceeding {
 		trying100 := message.MakeGenericResponse(100, "TRYING", trans.message)
-		call_transport_callback(trans, event.Event{Type: event.SEND, Data: trying100})
+		call_transport_callback(trans, event.Event{Type: event.MESS, Data: trying100})
 	} else if ev.Data == timer_g && trans.state == completed {
-		call_transport_callback(trans, event.Event{Type: event.SEND, Data: trans.last_res})
+		call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.last_res})
 		trans.timers[timer_g].Start(min(2*trans.timers[timer_g].Duration(), T2))
 	} else if ev.Data == timer_i && trans.state == confirmed {
 		trans.state = terminated
@@ -140,12 +140,12 @@ func (trans *Sitrans) handle_recv_msg(ev event.Event) {
 	status_code := msg.Response.StatusCode
 	if status_code >= 100 && status_code < 200 && trans.state == proceeding {
 		trans.timers[timer_prv].Stop()
-		call_transport_callback(trans, event.Event{Type: event.SEND, Data: msg})
+		call_transport_callback(trans, event.Event{Type: event.MESS, Data: msg})
 	} else if status_code >= 200 && status_code <= 300 && trans.state == proceeding {
-		call_transport_callback(trans, event.Event{Type: event.SEND, Data: msg})
+		call_transport_callback(trans, event.Event{Type: event.MESS, Data: msg})
 		trans.state = terminated
 	} else if status_code > 300 {
-		call_transport_callback(trans, event.Event{Type: event.SEND, Data: msg})
+		call_transport_callback(trans, event.Event{Type: event.MESS, Data: msg})
 		trans.timers[timer_g].Start(tig_dur)
 		trans.timers[timer_h].Start(tih_dur)
 		trans.last_res = msg
