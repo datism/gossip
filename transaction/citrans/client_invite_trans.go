@@ -55,7 +55,7 @@ func Make(
 	}
 }
 
-func (trans Citrans) Send(event event.Event) {
+func (trans Citrans) Event(event event.Event) {
 	trans.transc <- event
 }
 
@@ -64,7 +64,7 @@ func (trans *Citrans) Start() {
 }
 
 func (trans *Citrans) start() {
-	call_transport_callback(trans, event.Event{Type: event.SEND, Data: trans.message})
+	call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.message})
 	trans.timers[TIMERA].Start(tia_dur)
 	trans.timers[TIMERB].Start(tib_dur)
 
@@ -94,7 +94,7 @@ func (trans *Citrans) handle_event(ev event.Event) {
 	switch ev.Type {
 	case event.TIMEOUT:
 		trans.handle_timer(ev)
-	case event.RECV:
+	case event.MESS:
 		trans.handle_recv_msg(ev)
 	default:
 		return
@@ -106,7 +106,7 @@ func (trans *Citrans) handle_timer(ev event.Event) {
 		call_core_callback(trans, event.Event{Type: event.TIMEOUT, Data: TIMERB})
 		trans.state = terminated
 	} else if ev.Data == TIMERA && trans.state == calling {
-		call_transport_callback(trans, event.Event{Type: event.SEND, Data: trans.message})
+		call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.message})
 		trans.timers[TIMERA].Start(trans.timers[TIMERA].Duration() * 2)
 	} else if ev.Data == TIMERD && trans.state == completed {
 		trans.state = terminated
@@ -135,14 +135,14 @@ func (trans *Citrans) handle_recv_msg(ev event.Event) {
 		if trans.state < completed {
 			call_core_callback(trans, ev)
 			ack := message.MakeGenericAck(trans.message, response)
-			call_transport_callback(trans, event.Event{Type: event.SEND, Data: ack})
+			call_transport_callback(trans, event.Event{Type: event.MESS, Data: ack})
 
 			trans.timers[TIMERB].Stop()
 			trans.timers[TIMERD].Start(tid_dur)
 			trans.state = completed
 		} else if trans.state == completed {
 			ack := message.MakeGenericAck(trans.message, response)
-			call_transport_callback(trans, event.Event{Type: event.SEND, Data: ack})
+			call_transport_callback(trans, event.Event{Type: event.MESS, Data: ack})
 		}
 	}
 }
