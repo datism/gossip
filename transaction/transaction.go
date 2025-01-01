@@ -2,7 +2,7 @@ package transaction
 
 import (
 	"fmt"
-	"gossip/event"
+	"gossip/util"
 	"gossip/message"
 )
 
@@ -27,7 +27,7 @@ func (tid TransID) String() string {
 }
 
 type Transaction interface {
-	Event(event event.Event)
+	Event(event util.Event)
 	Start()
 }
 

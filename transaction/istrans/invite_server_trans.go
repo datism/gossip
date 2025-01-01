@@ -1,10 +1,9 @@
-package sitrans
+package istrans
 
 import (
-	"gossip/event"
+	"gossip/util"
 	"gossip/message"
 	"gossip/transaction"
-	"gossip/util"
 )
 
 //      		  |INVITE
@@ -84,16 +83,16 @@ type Sitrans struct {
 	message  *message.SIPMessage // The SIP message associated with the transaction
 	last_res *message.SIPMessage // The last response received
 	timers   [4]util.Timer       // List of timers used for managing retransmissions and timeouts
-	transc   chan event.Event    // Channel for receiving events like timeouts or messages
-	trpt_cb  func(transaction.Transaction, event.Event) // Callback for transport layer
-	core_cb  func(transaction.Transaction, event.Event) // Callback for core layer (application logic)
+	transc   chan util.Event    // Channel for receiving events like timeouts or messages
+	trpt_cb  func(transaction.Transaction, util.Event) // Callback for transport layer
+	core_cb  func(transaction.Transaction, util.Event) // Callback for core layer (application logic)
 }
 
 // Make creates and initializes a new Sitrans instance with the given message and callbacks
 func Make(
 	message *message.SIPMessage,
-	transport_callback func(transaction.Transaction, event.Event),
-	core_callback func(transaction.Transaction, event.Event),
+	transport_callback func(transaction.Transaction, util.Event),
+	core_callback func(transaction.Transaction, util.Event),
 ) *Sitrans {
 	// Create new timers for the transaction state machine
 	timerprv := util.NewTimer()
@@ -104,7 +103,7 @@ func Make(
 	// Return a new Sitrans instance with the provided parameters
 	return &Sitrans{
 		message: message,
-		transc:  make(chan event.Event),  // Channel for event communication
+		transc:  make(chan util.Event),  // Channel for event communication
 		timers:  [4]util.Timer{timerprv, timerg, timerdh, timeri}, // Initialize the timers array
 		state:   proceeding, // Initial state is "proceeding"
 		trpt_cb: transport_callback, // Transport callback for message transmission
@@ -113,7 +112,7 @@ func Make(
 }
 
 // Event is used to send events to the transaction, which are handled in the start() method
-func (trans Sitrans) Event(event event.Event) {
+func (trans Sitrans) Event(event util.Event) {
 	trans.transc <- event // Push the event to the transc channel for processing
 }
 
@@ -128,10 +127,10 @@ func (trans *Sitrans) start() {
 	trans.timers[timer_prv].Start(tiprv_dur)
 	
 	// Call the core callback with the original message
-	call_core_callback(trans, event.Event{Type: event.MESS, Data: trans.message})
+	call_core_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
 
 	// Define a variable to hold incoming events
-	var ev event.Event
+	var ev util.Event
 
 	// Main event loop for processing the transaction
 	for {
@@ -139,13 +138,13 @@ func (trans *Sitrans) start() {
 		select {
 		case ev = <-trans.transc: // Event received from the transc channel
 		case <-trans.timers[timer_prv].Chan(): // Timer Prv has expired
-			ev = event.Event{Type: event.TIMEOUT, Data: timer_prv}
+			ev = util.Event{Type: util.TIMEOUT, Data: timer_prv}
 		case <-trans.timers[timer_g].Chan(): // Timer G has expired
-			ev = event.Event{Type: event.TIMEOUT, Data: timer_g}
+			ev = util.Event{Type: util.TIMEOUT, Data: timer_g}
 		case <-trans.timers[timer_h].Chan(): // Timer H has expired
-			ev = event.Event{Type: event.TIMEOUT, Data: timer_h}
+			ev = util.Event{Type: util.TIMEOUT, Data: timer_h}
 		case <-trans.timers[timer_i].Chan(): // Timer I has expired
-			ev = event.Event{Type: event.TIMEOUT, Data: timer_i}
+			ev = util.Event{Type: util.TIMEOUT, Data: timer_i}
 		}
 
 		// Handle the received event
@@ -159,11 +158,11 @@ func (trans *Sitrans) start() {
 }
 
 // handle_event processes different types of events: timeouts and messages
-func (ctx *Sitrans) handle_event(ev event.Event) {
+func (ctx *Sitrans) handle_event(ev util.Event) {
 	switch ev.Type {
-	case event.TIMEOUT: // Handle timeout events (timer expirations)
+	case util.TIMEOUT: // Handle timeout events (timer expirations)
 		ctx.handle_timer(ev)
-	case event.MESS: // Handle received messages (SIP responses)
+	case util.MESS: // Handle received messages (SIP responses)
 		ctx.handle_msg(ev)
 	default:
 		return // If the event type is not recognized, do nothing
@@ -171,19 +170,19 @@ func (ctx *Sitrans) handle_event(ev event.Event) {
 }
 
 // handle_timer processes events triggered by timer expirations
-func (trans *Sitrans) handle_timer(ev event.Event) {
+func (trans *Sitrans) handle_timer(ev util.Event) {
 	// Handle the event based on which timer expired
 	if ev.Data == timer_h {
 		// Timer H expired: Transaction is terminated due to timeout
-		call_core_callback(trans, event.Event{Type: event.TIMEOUT, Data: trans.message})
+		call_core_callback(trans, util.Event{Type: util.TIMEOUT, Data: trans.message})
 		trans.state = terminated
 	} else if ev.Data == timer_prv && trans.state == proceeding {
 		// Timer Prv expired: Send 100 TRYING response
 		trying100 := message.MakeGenericResponse(100, "TRYING", trans.message)
-		call_transport_callback(trans, event.Event{Type: event.MESS, Data: trying100})
+		call_transport_callback(trans, util.Event{Type: util.MESS, Data: trying100})
 	} else if ev.Data == timer_g && trans.state == completed {
 		// Timer G expired: Retransmit the last response and restart Timer G with adjusted duration
-		call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.last_res})
+		call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res})
 		trans.timers[timer_g].Start(min(2*trans.timers[timer_g].Duration(), t2))
 	} else if ev.Data == timer_i && trans.state == confirmed {
 		// Timer I expired: Move to the terminated state (final step)
@@ -192,7 +191,7 @@ func (trans *Sitrans) handle_timer(ev event.Event) {
 }
 
 // handle_msg processes received SIP messages (requests or responses)
-func (trans *Sitrans) handle_msg(ev event.Event) {
+func (trans *Sitrans) handle_msg(ev util.Event) {
 	// Extract the SIP message from the event
 	msg, ok := ev.Data.(*message.SIPMessage)
 	if !ok {
@@ -211,7 +210,7 @@ func (trans *Sitrans) handle_msg(ev event.Event) {
 
 		if msg.Request.Method == "INVITE" && trans.state == completed {
 			// Received an INVITE request in the "completed" state: Retransmit the last response
-			call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.last_res})
+			call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res})
 		}
 
 		return // Return early if the message is an ACK or INVITE
@@ -222,14 +221,14 @@ func (trans *Sitrans) handle_msg(ev event.Event) {
 	if status_code >= 100 && status_code < 200 && trans.state == proceeding {
 		// Provisional responses (1xx): Send them to the transport layer
 		trans.timers[timer_prv].Stop() // Stop Timer Prv if a provisional response is received
-		call_transport_callback(trans, event.Event{Type: event.MESS, Data: msg})
+		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg})
 	} else if status_code >= 200 && status_code <= 300 && trans.state == proceeding {
 		// Final 2xx responses: Transition to terminated state
-		call_transport_callback(trans, event.Event{Type: event.MESS, Data: msg})
+		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg})
 		trans.state = terminated
 	} else if status_code > 300 {
 		// Error responses (3xx-6xx): Transition to "completed" state
-		call_transport_callback(trans, event.Event{Type: event.MESS, Data: msg})
+		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg})
 		trans.timers[timer_g].Start(tig_dur) // Start Timer G for retransmissions
 		trans.timers[timer_h].Start(tih_dur) // Start Timer H for retransmissions
 		trans.last_res = msg // Save the last response
@@ -238,11 +237,11 @@ func (trans *Sitrans) handle_msg(ev event.Event) {
 }
 
 // call_core_callback invokes the core callback with the provided event
-func call_core_callback(sitrans *Sitrans, ev event.Event) {
+func call_core_callback(sitrans *Sitrans, ev util.Event) {
 	go sitrans.core_cb(sitrans, ev) // Call the core callback asynchronously
 }
 
 // call_transport_callback invokes the transport callback with the provided event
-func call_transport_callback(sitrans *Sitrans, ev event.Event) {
+func call_transport_callback(sitrans *Sitrans, ev util.Event) {
 	go sitrans.trpt_cb(sitrans, ev) // Call the transport callback asynchronously
 }

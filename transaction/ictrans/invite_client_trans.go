@@ -1,7 +1,6 @@
-package citrans
+package ictrans
 
 import (
-	"gossip/event"
 	"gossip/message"
 	"gossip/transaction"
 	"gossip/util"
@@ -69,29 +68,29 @@ const (
     terminated        // Final state, transaction is completed and destroyed
 )
 
-// Citrans represents a SIP INVITE client transaction
-type Citrans struct {
+// Ictrans represents a SIP INVITE client transaction
+type Ictrans struct {
     state   state          // Current state of the transaction
     message *message.SIPMessage // The SIP message being processed (INVITE or response)
     timers  [3]util.Timer  // The timers used to manage retransmissions and timeouts
-    transc  chan event.Event  // Channel for receiving events and processing them
-    trpt_cb func(transaction.Transaction, event.Event)  // Transport callback
-    core_cb func(transaction.Transaction, event.Event)   // Core callback
+    transc  chan util.Event  // Channel for receiving events and processing them
+    trpt_cb func(transaction.Transaction, util.Event)  // Transport callback
+    core_cb func(transaction.Transaction, util.Event)   // Core callback
 }
 
 // Make creates a new instance of a client transaction, initializing timers and setting initial state
 func Make(
     message *message.SIPMessage,  // The INVITE message to be processed
-    transport_callback func(transaction.Transaction, event.Event),  // Transport layer callback
-    core_callback func(transaction.Transaction, event.Event),  // Core callback
-) *Citrans {
+    transport_callback func(transaction.Transaction, util.Event),  // Transport layer callback
+    core_callback func(transaction.Transaction, util.Event),  // Core callback
+) *Ictrans {
     timera := util.NewTimer()   // Timer A for retransmissions
     timerb := util.NewTimer()   // Timer B for transaction timeout
     timerd := util.NewTimer()   // Timer D for completion timeout
 
-    return &Citrans{
+    return &Ictrans{
         message: message,        // The initial SIP message (INVITE)
-        transc:  make(chan event.Event), // Channel to communicate events
+        transc:  make(chan util.Event), // Channel to communicate events
         timers:  [3]util.Timer{timera, timerb, timerd}, // Initialize timers
         state:   calling,         // Start with the calling state
         trpt_cb: transport_callback, // Set transport callback
@@ -100,35 +99,35 @@ func Make(
 }
 
 // Event triggers an event in the transaction. The event can be a SIP message or timeout.
-func (trans Citrans) Event(event event.Event) {
+func (trans Ictrans) Event(event util.Event) {
     trans.transc <- event
 }
 
 // Start begins the processing of the client transaction, invoking the transport callback and starting timers.
-func (trans *Citrans) Start() {
+func (trans *Ictrans) Start() {
     go trans.start()  // Start processing in a separate goroutine to handle events asynchronously
 }
 
 // start is the main loop that processes events in the client transaction.
-func (trans *Citrans) start() {
+func (trans *Ictrans) start() {
     // Initial action: Call transport callback to send INVITE message
-    call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.message})
+    call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
     // Start Timer A (T1) for retransmissions and Timer B (64*T1) for transaction timeout
     trans.timers[timer_a].Start(tia_dur)
     trans.timers[timer_b].Start(tib_dur)
 
-    var ev event.Event
+    var ev util.Event
 
     // Event loop that listens for events (SIP messages or timer expirations)
     for {
         select {
         case ev = <-trans.transc:  // Message event (SIP response)
         case <-trans.timers[timer_a].Chan():  // Timer A expired, triggering a retransmission
-            ev = event.Event{Type: event.TIMEOUT, Data: timer_a}
+            ev = util.Event{Type: util.TIMEOUT, Data: timer_a}
         case <-trans.timers[timer_b].Chan():  // Timer B expired, transaction timed out
-            ev = event.Event{Type: event.TIMEOUT, Data: timer_b}
+            ev = util.Event{Type: util.TIMEOUT, Data: timer_b}
         case <-trans.timers[timer_d].Chan():  // Timer D expired, termination after final response
-            ev = event.Event{Type: event.TIMEOUT, Data: timer_d}
+            ev = util.Event{Type: util.TIMEOUT, Data: timer_d}
         }
 
         // Handle the received event (message or timeout)
@@ -143,11 +142,11 @@ func (trans *Citrans) start() {
 }
 
 // handle_event processes events, which can be timeouts or received messages
-func (trans *Citrans) handle_event(ev event.Event) {
+func (trans *Ictrans) handle_event(ev util.Event) {
     switch ev.Type {
-    case event.TIMEOUT:
+    case util.TIMEOUT:
         trans.handle_timer(ev)  // Handle timeout events (timer expirations)
-    case event.MESS:
+    case util.MESS:
         trans.handle_msg(ev)  // Handle received SIP messages (responses)
     default:
         return
@@ -155,12 +154,12 @@ func (trans *Citrans) handle_event(ev event.Event) {
 }
 
 // handle_timer processes timeout events, which can trigger retransmissions or state transitions
-func (trans *Citrans) handle_timer(ev event.Event) {
+func (trans *Ictrans) handle_timer(ev util.Event) {
     if ev.Data == timer_b {  // Timer B expired, inform TU of timeout and terminate transaction
-        call_core_callback(trans, event.Event{Type: event.TIMEOUT, Data: trans.message})
+        call_core_callback(trans, util.Event{Type: util.TIMEOUT, Data: trans.message})
         trans.state = terminated
     } else if ev.Data == timer_a && trans.state == calling {  // Timer A expired in calling state, retransmit INVITE
-        call_transport_callback(trans, event.Event{Type: event.MESS, Data: trans.message})
+        call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
         trans.timers[timer_a].Start(trans.timers[timer_a].Duration() * 2)  // Double Timer A duration
     } else if ev.Data == timer_d && trans.state == completed {  // Timer D expired in completed state, terminate transaction
         trans.state = terminated
@@ -168,7 +167,7 @@ func (trans *Citrans) handle_timer(ev event.Event) {
 }
 
 // handle_msg processes received SIP messages, transitioning states based on response codes
-func (trans *Citrans) handle_msg(ev event.Event) {
+func (trans *Ictrans) handle_msg(ev util.Event) {
     response, ok := ev.Data.(*message.SIPMessage)  // Extract the SIP message from the event
     if !ok || response.Response == nil {  // Invalid or missing response, ignore the event
         return
@@ -191,24 +190,24 @@ func (trans *Citrans) handle_msg(ev event.Event) {
         if trans.state < completed {  // If in calling or proceeding state, generate ACK and stop Timer B
             call_core_callback(trans, ev)
             ack := message.MakeGenericAck(trans.message, response)  // Create an ACK for the response
-            call_transport_callback(trans, event.Event{Type: event.MESS, Data: ack})  // Send the ACK
+            call_transport_callback(trans, util.Event{Type: util.MESS, Data: ack})  // Send the ACK
 
             trans.timers[timer_b].Stop()  // Stop Timer B (transaction timeout)
             trans.timers[timer_d].Start(tid_dur)  // Start Timer D (completion timeout)
             trans.state = completed  // Transition to completed state
         } else if trans.state == completed {  // In completed state, just retransmit the ACK
             ack := message.MakeGenericAck(trans.message, response)
-            call_transport_callback(trans, event.Event{Type: event.MESS, Data: ack})
+            call_transport_callback(trans, util.Event{Type: util.MESS, Data: ack})
         }
     }
 }
 
 // call_core_callback invokes the core callback to handle transaction-related events
-func call_core_callback(citrans *Citrans, ev event.Event) {
+func call_core_callback(citrans *Ictrans, ev util.Event) {
     go citrans.core_cb(citrans, ev)  // Call the core callback in a new goroutine
 }
 
 // call_transport_callback invokes the transport callback to send or receive messages
-func call_transport_callback(citrans *Citrans, ev event.Event) {
+func call_transport_callback(citrans *Ictrans, ev util.Event) {
     go citrans.trpt_cb(citrans, ev)  // Call the transport callback in a new goroutine
 }

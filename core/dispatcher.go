@@ -1,11 +1,11 @@
 package core
 
 import (
-	"gossip/event"
 	"gossip/message"
 	"gossip/transaction"
-	"gossip/transaction/citrans"
+	"gossip/transaction/ictrans"
 	"gossip/transport"
+	"gossip/util"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -22,7 +22,7 @@ func HandleMessage(transport *transport.Transport, msg *message.SIPMessage) {
 
 	if trans := FindTransaction(tid); trans != nil {
 		log.Debug().Msg("Found transaction")
-		trans.Event(event.Event{Type: event.MESS, Data: msg})
+		trans.Event(util.Event{Type: util.MESS, Data: msg})
 	} else {
 		if msg.Request != nil {
 			log.Error().Msg("Cannot start new transaction with response")
@@ -48,28 +48,28 @@ func HandleMessage(transport *transport.Transport, msg *message.SIPMessage) {
 }
 
 func StartTransaction(
-	transType transaction.TransType, 
-	transID *transaction.TransID, 
+	transType transaction.TransType,
+	transID *transaction.TransID,
 	trpt *transport.Transport,
 	msg *message.SIPMessage,
-	)  {
+) {
 
 	var trans transaction.Transaction
 
 	switch transType {
 	case transaction.INVITE_CLIENT:
-		trans = citrans.Make(msg, TransportCallback, CoreCallback)
+		trans = ictrans.Make(msg, TransportCallback, CoreCallback)
 	}
 
 	m.Store(&transID, trans)
 	trans.Start()
 }
 
-func CoreCallback(from transaction.Transaction, ev event.Event) {
+func CoreCallback(from transaction.Transaction, ev util.Event) {
 
 }
 
-func TransportCallback(from transaction.Transaction, ev event.Event) {
+func TransportCallback(from transaction.Transaction, ev util.Event) {
 
 }
 

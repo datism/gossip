@@ -1,4 +1,4 @@
-package event
+package util
 
 type EventType int
 
