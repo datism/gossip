@@ -3,7 +3,8 @@ package core
 import (
 	"gossip/message"
 	"gossip/transaction"
-	"gossip/transaction/ictrans"
+	"gossip/transaction/istrans"
+	"gossip/transaction/nistrans"
 	"gossip/transport"
 	"gossip/util"
 	"sync"
@@ -35,42 +36,31 @@ func HandleMessage(transport *transport.Transport, msg *message.SIPMessage) {
 			return
 		}
 
-		var transType transaction.TransType
-		if msg.Request.Method == "INVITE" {
-			transType = transaction.INVITE_SERVER
-		} else {
-			transType = transaction.NON_INVITE_SERVER
-		}
-
-		StartTransaction(transType, tid, transport, msg)
 		log.Debug().Msg("Create start transaction with trans id: " + tid.String())
 	}
 }
 
-func StartTransaction(
-	transType transaction.TransType,
-	transID *transaction.TransID,
-	trpt *transport.Transport,
+func StartServerTransaction(
 	msg *message.SIPMessage,
+	core_cb func(transaction.Transaction, util.Event),
+	tranport_cb func(transaction.Transaction, util.Event),
 ) {
+	tid, err := transaction.MakeTransactionID(msg)
+	if err != nil {
+		log.Error().Err(err).Msg("Cannot create transaction ID")
+		return
+	}
 
 	var trans transaction.Transaction
 
-	switch transType {
-	case transaction.INVITE_CLIENT:
-		trans = ictrans.Make(msg, TransportCallback, CoreCallback)
+	if msg.Request.Method == "INVITE" {
+		trans = istrans.Make(msg, tranport_cb, core_cb)
+	} else {
+		trans = nistrans.Make(msg, tranport_cb, core_cb)
 	}
 
-	m.Store(&transID, trans)
+	m.Store(&tid, trans)
 	trans.Start()
-}
-
-func CoreCallback(from transaction.Transaction, ev util.Event) {
-
-}
-
-func TransportCallback(from transaction.Transaction, ev util.Event) {
-
 }
 
 func FindTransaction(transID *transaction.TransID) transaction.Transaction {

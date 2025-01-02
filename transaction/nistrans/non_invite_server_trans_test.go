@@ -55,6 +55,7 @@ func TestNormalScenario(t *testing.T) {
 
   // 3. timer j -> terminated
   sleep(tij_dur)
+  sleep(1)
   assertState(t, trans.state, terminated)
 }
 

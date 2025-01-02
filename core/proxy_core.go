@@ -1,47 +1,33 @@
 package core
 
 import (
+	"gossip/message"
 	"gossip/transaction"
-  "gossip/message"
-  "gossip/util"
-	"github.com/rs/zerolog/log"
+	"gossip/util"
 )
 
 type proxy struct {
-	Chan chan util.Event
+	Chan         chan util.Event
 	client_trans transaction.Transaction
 	server_trans transaction.Transaction
-	
 }
 
-func Make(request *message.SIPmessage) { 
-	ch = make(chan util.Event, 3)
-  tid, err := transaction.MakeTransactionID(msg)
-	if err != nil {
-		log.Error().Err(err).Msg("Cannot create transaction ID")
+func Start(request *message.SIPMessage) {
+	ch := make(chan util.Event, 3)
+
+	core_cb := func(from transaction.Transaction, ev util.Event) {
+		ch <- ev
+	}
+
+	trpt_cb := func(from transaction.Transaction, ev util.Event) {
+		msg, ok := ev.Data.(*message.SIPMessage)
+		if !ok {
+			return
+		}
+
+		trprt := msg.Transport
 		return
 	}
 
-  core_cb = func(from transaction.Transaction, ev util.Event) {
-    ch 
-  }
-
-  StartServerTransaction(tid, request, trpt_cb, core_cb)
-  
-  
+	StartServerTransaction(request, core_cb, trpt_cb)
 }
-
-func start() {
-  
-}
-
-// func MessageProcessing(transChan chan transaction.Event) {
-// 	for event := range transChan {
-// 		switch event.Type {
-// 		case transaction.RECV:
-// 			log.Debug().Msg("Handling messsage")
-// 		default:
-// 			log.Debug().Msg("Unexpected message")
-// 		}
-// 	}
-// }

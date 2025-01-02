@@ -10,6 +10,7 @@ import (
 const (
 	t1 = 500  // Timer T1 duration (500ms)
 	t2 = 4000 // Timer T2 duration (4000ms)
+	t4 = 5000 // Timer T4 duration (5000ms)
 	tif_dur = 64 * t1 // Timer F duration (64*T1)
 	tie_dur = t1
 	tik_dur = t4
@@ -85,9 +86,6 @@ func (trans *NIctrans) start() {
 	// Set Timer E for retransmission to fire at T1
 	trans.timers[timer_e].Start(tie_dur)
 
-	// Call the core callback with the original message
-	call_core_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
-
 	var ev util.Event
 	for {
 		// Wait for events (e.g., timeouts, received messages)
@@ -139,7 +137,7 @@ func (trans *NIctrans) handle_timeout(ev util.Event) {
 // handle_message processes received SIP messages (responses)
 func (trans *NIctrans) handle_message(ev util.Event) {
 	msg, ok := ev.Data.(*message.SIPMessage)
-	if !ok && msg.Response == nil {
+	if !ok || msg.Response == nil {
 		return
 	}
 
