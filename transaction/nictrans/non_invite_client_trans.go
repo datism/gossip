@@ -10,12 +10,10 @@ import (
 const (
 	t1 = 500  // Timer T1 duration (500ms)
 	t2 = 4000 // Timer T2 duration (4000ms)
-	t4 = 5000 // Timer T4 duration (5000ms)
+	tif_dur = 64 * t1 // Timer F duration (64*T1)
+	tie_dur = t1
+	tik_dur = t4
 )
-
-const tif_dur = 64 * t1 // Timer F duration (64*T1)
-const tie_dur = t1
-const tik_dur = t4
 
 // Timer constants (Indexes)
 const (
