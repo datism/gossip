@@ -141,7 +141,7 @@ func (trans *NIctrans) handle_timeout(ev util.Event) {
 // handle_message processes received SIP messages (responses)
 func (trans *NIctrans) handle_message(ev util.Event) {
 	msg, ok := ev.Data.(*message.SIPMessage)
-	if !ok {
+	if !ok && msg.Response == nil {
 		return
 	}
 
