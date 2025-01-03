@@ -44,7 +44,7 @@ func StartServerTransaction(
 	msg *message.SIPMessage,
 	core_cb func(transaction.Transaction, util.Event),
 	tranport_cb func(transaction.Transaction, util.Event),
-) {
+) transaction.Transaction {
 	tid, err := transaction.MakeTransactionID(msg)
 	if err != nil {
 		log.Error().Err(err).Msg("Cannot create transaction ID")
@@ -60,7 +60,32 @@ func StartServerTransaction(
 	}
 
 	m.Store(&tid, trans)
-	trans.Start()
+	go trans.Start()
+	return trans
+}
+
+func StartClientTransaction(
+	msg *message.SIPMessage,
+	core_cb func(transaction.Transaction, util.Event),
+	tranport_cb func(transaction.Transaction, util.Event),
+) transaction.Transaction {
+	tid, err := transaction.MakeTransactionID(msg)
+	if err != nil {
+		log.Error().Err(err).Msg("Cannot create transaction ID")
+		return
+	}
+
+	var trans transaction.Transaction
+
+	if msg.Cseq.Method == "INVITE" {
+		trans = ictrans.Make(msg, tranport_cb, core_cb)
+	} else {
+		trans = nictrans.Make(msg, tranport_cb, core_cb)
+	}
+
+	m.Store(&tid, trans)
+	go trans.Start()
+	return trans
 }
 
 func FindTransaction(transID *transaction.TransID) transaction.Transaction {
