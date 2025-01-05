@@ -45,7 +45,7 @@ type NIctrans struct {
 
 // Make creates and initializes a new NIctrans instance with the given message and callbacks
 func Make(
-	message *message.SIPMessage,
+	message message.SIPMessage,
 	transport_callback func(transaction.Transaction, util.Event),
 	core_callback func(transaction.Transaction, util.Event),
 ) *NIctrans {
@@ -56,7 +56,7 @@ func Make(
 
 	// Return a new NIctrans instance with the provided parameters
 	return &NIctrans{
-		message: message,
+		message: &message,
 		transc:  make(chan util.Event),                 // Channel for event communication
 		timers:  [3]util.Timer{timerE, timerF, timerK}, // Initialize the timers array
 		state:   trying,                                // Initial state is "trying"
@@ -156,10 +156,10 @@ func (trans *NIctrans) handle_message(ev util.Event) {
 
 // call_core_callback invokes the core callback with the provided event
 func call_core_callback(trans *NIctrans, ev util.Event) {
-	go trans.core_cb(trans, ev)
+	trans.core_cb(trans, ev)
 }
 
 // call_transport_callback invokes the transport callback with the provided event
 func call_transport_callback(trans *NIctrans, ev util.Event) {
-	go trans.trpt_cb(trans, ev)
+	trans.trpt_cb(trans, ev)
 }

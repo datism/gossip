@@ -3,7 +3,9 @@ package core
 import (
 	"gossip/message"
 	"gossip/transaction"
+	"gossip/transaction/ictrans"
 	"gossip/transaction/istrans"
+	"gossip/transaction/nictrans"
 	"gossip/transaction/nistrans"
 	"gossip/transport"
 	"gossip/util"
@@ -48,7 +50,7 @@ func StartServerTransaction(
 	tid, err := transaction.MakeTransactionID(msg)
 	if err != nil {
 		log.Error().Err(err).Msg("Cannot create transaction ID")
-		return
+		return nil
 	}
 
 	var trans transaction.Transaction
@@ -69,15 +71,16 @@ func StartClientTransaction(
 	core_cb func(transaction.Transaction, util.Event),
 	tranport_cb func(transaction.Transaction, util.Event),
 ) transaction.Transaction {
+
 	tid, err := transaction.MakeTransactionID(msg)
 	if err != nil {
 		log.Error().Err(err).Msg("Cannot create transaction ID")
-		return
+		return nil
 	}
 
 	var trans transaction.Transaction
 
-	if msg.Cseq.Method == "INVITE" {
+	if msg.CSeq.Method == "INVITE" {
 		trans = ictrans.Make(msg, tranport_cb, core_cb)
 	} else {
 		trans = nictrans.Make(msg, tranport_cb, core_cb)

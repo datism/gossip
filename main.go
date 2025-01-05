@@ -83,7 +83,7 @@ func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
 
 	transport := &transport.Transport{
 		Protocol:   "UDP",
-		Socket:     conn,
+		Conn:       conn,
 		LocalAddr:  udp_addr,
 		RemoteAddr: clientAddr,
 	}

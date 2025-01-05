@@ -1,9 +1,9 @@
 package nistrans
 
 import (
-	"gossip/util"
 	"gossip/message"
 	"gossip/transaction"
+	"gossip/util"
 	"reflect"
 	"testing"
 	"time"
@@ -34,7 +34,7 @@ func TestNormalScenario(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(update, mockTransportCallback, mockCoreCallback)
+	trans := Make(*update, mockTransportCallback, mockCoreCallback)
 
 	// 1. invite -> proceeding (send inv to core)
 	trans.Start()
@@ -53,10 +53,10 @@ func TestNormalScenario(t *testing.T) {
 	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: ok200})
 	assertState(t, trans.state, completed)
 
-  // 3. timer j -> terminated
-  sleep(tij_dur)
-  sleep(1)
-  assertState(t, trans.state, terminated)
+	// 3. timer j -> terminated
+	sleep(tij_dur)
+	sleep(1)
+	assertState(t, trans.state, terminated)
 }
 
 func assertState(t *testing.T, actual, expected state) {

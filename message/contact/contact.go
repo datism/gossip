@@ -1,6 +1,7 @@
 package contact
 
 import (
+	"fmt"
 	"gossip/message/uri"
 	"strconv"
 	"strings"
@@ -84,4 +85,34 @@ func parseParams(params string, contact *SIPContact) {
 			contact.Supported = append(contact.Supported, kv[0])
 		}
 	}
+}
+
+func Serialize(contact *SIPContact) string {
+	var builder strings.Builder
+
+	// Add Display Name if exists
+	if contact.DisName != "" {
+		builder.WriteString(fmt.Sprintf("%s ", contact.DisName))
+	}
+
+	// Add URI if exists
+	if contact.Uri != nil {
+		builder.WriteString(fmt.Sprintf("<%s>", uri.Serialize((contact.Uri))))
+	}
+
+	// Add Parameters
+	if contact.Qvalue > 0 {
+		builder.WriteString(fmt.Sprintf(";q=%.1f", contact.Qvalue))
+	}
+	if contact.Expire > 0 {
+		builder.WriteString(fmt.Sprintf(";expires=%d", contact.Expire))
+	}
+	for k, v := range contact.Paras {
+		builder.WriteString(fmt.Sprintf(";%s=%s", k, v))
+	}
+	for _, v := range contact.Supported {
+		builder.WriteString(fmt.Sprintf(";%s", v))
+	}
+
+	return builder.String()
 }

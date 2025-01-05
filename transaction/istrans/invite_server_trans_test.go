@@ -34,7 +34,7 @@ func TestNormalScenario(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(invite, mockTransportCallback, mockCoreCallback)
+	trans := Make(*invite, mockTransportCallback, mockCoreCallback)
 
 	// 1. invite -> proceeding (send inv to core)
 	trans.Start()
@@ -115,7 +115,7 @@ func TestErrorResponse(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(inviteMessage, mockTransportCallback, mockCoreCallback)
+	trans := Make(*inviteMessage, mockTransportCallback, mockCoreCallback)
 
 	// 1. invite -> proceeding (send inv to core)
 	trans.Start()
@@ -189,7 +189,7 @@ func TestTimeoutTimer(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(invite, mockTransportCallback, mockCoreCallback)
+	trans := Make(*invite, mockTransportCallback, mockCoreCallback)
 
 	// 1. invite -> calling (send invite to core)
 	trans.Start()

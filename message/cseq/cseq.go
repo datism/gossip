@@ -1,6 +1,7 @@
 package cseq
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -23,4 +24,8 @@ func Parse(cseq string) *SIPCseq {
 	sip_cseq.Method = values[1]
 
 	return &sip_cseq
+}
+
+func Serialize(cseq *SIPCseq) string {
+	return fmt.Sprintf("%d %s", cseq.Seq, cseq.Method)
 }

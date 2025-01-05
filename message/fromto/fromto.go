@@ -41,3 +41,30 @@ func Parse(fromto string) *SIPFromTo {
 
 	return &sip_fromto
 }
+
+func Serialize(fromTo *SIPFromTo) string {
+	var result strings.Builder
+
+	// Add URI
+	if fromTo.Uri != nil {
+		result.WriteString("<")
+		result.WriteString(uri.Serialize(fromTo.Uri))
+		result.WriteString(">")
+	}
+
+	// Add tag if present
+	if fromTo.Tag != "" {
+		result.WriteString(";tag=")
+		result.WriteString(fromTo.Tag)
+	}
+
+	// Add other parameters
+	for k, v := range fromTo.Paras {
+		result.WriteString(";")
+		result.WriteString(k)
+		result.WriteString("=")
+		result.WriteString(v)
+	}
+
+	return result.String()
+}

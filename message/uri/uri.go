@@ -1,6 +1,7 @@
 package uri
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -135,4 +136,53 @@ func parse_headers(headers string, uri *SIPUri) {
 			uri.Headers[kv[0]] = kv[1]
 		}
 	}
+}
+
+func Serialize(uri *SIPUri) string {
+	var result strings.Builder
+
+	// Add the scheme
+	if uri.Scheme != "" {
+		result.WriteString(uri.Scheme)
+		result.WriteString(":")
+	}
+
+	// Add the user info
+	if uri.User != "" {
+		result.WriteString(uri.User)
+		if uri.Pass != "" {
+			result.WriteString(":")
+			result.WriteString(uri.Pass)
+		}
+		result.WriteString("@")
+	}
+
+	// Add the host and port
+	result.WriteString(uri.Domain)
+	if uri.Port != -1 {
+		result.WriteString(":")
+		result.WriteString(strconv.Itoa(uri.Port))
+	}
+
+	// Add options
+	if len(uri.Opts) > 0 {
+		opts := []string{}
+		for k, v := range uri.Opts {
+			opts = append(opts, fmt.Sprintf("%s=%s", k, v))
+		}
+		result.WriteString(";")
+		result.WriteString(strings.Join(opts, ";"))
+	}
+
+	// Add headers
+	if len(uri.Headers) > 0 {
+		headers := []string{}
+		for k, v := range uri.Headers {
+			headers = append(headers, fmt.Sprintf("%s=%s", k, v))
+		}
+		result.WriteString("?")
+		result.WriteString(strings.Join(headers, "&"))
+	}
+
+	return result.String()
 }

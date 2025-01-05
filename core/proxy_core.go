@@ -2,80 +2,16 @@ package core
 
 import (
 	"gossip/message"
+	"gossip/message/via"
 	"gossip/transaction"
+	"gossip/transport"
 	"gossip/util"
+	"math/rand"
+	"net"
+	"strconv"
 )
 
-// type state int
-
-// const (
-// 	wait_for_request state = iota
-// 	wait_for_response
-// 	terminated
-// )
-
-
-// type proxy struct {
-// 	strans transaction.Transaction
-// 	strans_chan chan util.Event
-// 	ctrans transaction.Transaction
-// 	ctrans_chan chan util.Event   
-// 	state 
-// }
-
-// func Make(request *message.SIPMessage) *proxy {
-// 	strans_chan := make(chan util.Event, 3)
-// 	ctrans_chan := make(chan util.Event, 3)
-
-// 	core_cb := func(from transaction.Transaction, ev util.Event) {
-// 		strans_chan <- ev
-// 	}
-
-// 	server_trans: StartServerTransaction(request, core_cb, trpt_cb)
-	   
-// 	return &proxy{
-// 		strans_chan: strans_chan,
-// 		ctrans_chan: ctrans_chan,
-// 		strans: server_trans
-// 	}
-// }
-
-// func (prx *proxy) Start() {
-// 	defer prx.ch.Close()
-
-// 	for {
-// 		select {
-// 		case ev := <- prx.strans_chan:
-// 			prx.handle_uac(ev)
-// 		case ev := <- prx.ctrans_chan:
-// 			prx.handle_uas(ev)
-// 		}
-
-// 		if prx.state == terminated {
-// 			return
-// 		}
-// 	}
-// }
-
-// func (prx *proxy) handle_uac(ev util.Event) {
-// 	Type = ev.Type
-
-// 	if (Type == util.Mess && prx.state = wait_for_request) {
-// 		msg, ok := ev.Data.(*message.SIPMessage)
-// 		if !ok {
-// 			return
-// 		}
-
-// 		core_cb := func(from transaction.Transaction, ev util.Event) {
-// 			prx.ctrans_chan <- ev
-// 		}
-
-// 		prx.ctrnas = StartClientTransaction(request, core_cb, trpt_cb)
-// 	}
-
-// }
-
-func statefull_route(request *message.SIPMessage) {
+func Statefull_route(request *message.SIPMessage) {
 	strans_chan := make(chan util.Event, 3)
 	ctrans_chan := make(chan util.Event, 3)
 
@@ -87,63 +23,94 @@ func statefull_route(request *message.SIPMessage) {
 		ctrans_chan <- ev
 	}
 
-	server_trans: StartServerTransaction(request, core_cb, trpt_cb)
+	server_trans := StartServerTransaction(request, strans_cb, trpt_cb)
 
-	ev <- strans_chan:
+	ev := <-strans_chan
 	request, ok := ev.Data.(*message.SIPMessage)
 	if !ok {
 		return
 	}
 
-	client_trans: StartServerTransaction(request, core_cb, trpt_cb)
+	to_uri := request.To.Uri
+	address := net.JoinHostPort(to_uri.Domain, strconv.Itoa(to_uri.Port))
+	DestAddr, err := net.ResolveUDPAddr("udp", address)
+	if err != nil {
+		return
+	}
+	DestTransport := transport.Transport{
+		Protocol:   "UDP",
+		Conn:       request.Transport.Conn,
+		LocalAddr:  request.Transport.LocalAddr,
+		RemoteAddr: DestAddr,
+	}
+
+	request.AddVia(&via.SIPVia{
+		Proto:  "UDP",
+		Domain: DestTransport.LocalAddr.IP.String(),
+		Port:   DestTransport.LocalAddr.Port,
+		Branch: randSeq(5),
+	})
+	request.Transport = &DestTransport
+
+	_ = StartServerTransaction(request, ctrans_cb, trpt_cb)
 
 	for {
-	case ev := <- ctrans_chan: 
-		if (ev.Type == util.MESS) {
-			response, ok := ev.Data.(*message.SIPMessage)
-			if !ok {
-				continue
-			}
-			server_trans.Event(ev)
+		select {
+		case ev := <-ctrans_chan:
+			if ev.Type == util.MESS {
+				response, ok := ev.Data.(*message.SIPMessage)
+				if !ok {
+					continue
+				}
+				server_trans.Event(ev)
 
-			status := response.Response.StatusCode 
-			if (status >= 200 && status < 300) {
+				status := response.Response.StatusCode
+				if status >= 200 && status < 300 {
+					return
+				}
+			} else if ev.Type == util.ERROR {
 				return
 			}
-		} else if (ev.Type == util.ERROR) {
-			return
-		}
-	case ev := <- strans_chan:
-		if (ev.Type == util.ERROR)  {
-			return
+		case ev := <-strans_chan:
+			if ev.Type == util.ERROR {
+				return
+			}
 		}
 	}
 }
 
-func stateless_route(request *message.SIPMessage) {
-	
+func Stateless_route(request *message.SIPMessage) {
+
 }
 
-func trpt_cb (from transaction.Transaction, ev util.Event) {
+func trpt_cb(from transaction.Transaction, ev util.Event) {
 	msg, ok := ev.Data.(*message.SIPMessage)
 	if !ok {
 		return
 	}
 
 	trprt := msg.Transport
-	bin, err := message.Serialize(msg)
-	if (err != nil) {
+	bin := message.Serialize(msg)
+	if bin == nil {
 		//serialize error
 		return
 	}
-	
-	 _, err := trprt.Socket.WriteToUDP(bin, trprt.RemoteAddr)
-	if (err != nil) {
+
+	_, err := trprt.Conn.WriteToUDP(bin, trprt.RemoteAddr)
+	if err != nil {
 		//error transport error
-		from.Event(util.Event{Type: util.ERROR, Data: msg)
+		from.Event(util.Event{Type: util.ERROR, Data: msg})
 	}
+
 	return
 }
 
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}

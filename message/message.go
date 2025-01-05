@@ -119,32 +119,32 @@ func Parse(data []byte) (*SIPMessage, error) {
 		}
 	}
 
-	if from := GetHeader(&msg, "from"); from != nil {
+	if from := msg.GetHeader("from"); from != nil {
 		msg.From = fromto.Parse(from[0])
-		delete(msg.Headers, "from")
+		msg.DeleteHeader("from")
 	}
 
-	if to := GetHeader(&msg, "to"); to != nil {
+	if to := msg.GetHeader("to"); to != nil {
 		msg.To = fromto.Parse(to[0])
-		delete(msg.Headers, "to")
+		msg.DeleteHeader("to")
 	}
 
-	if callid := GetHeader(&msg, "call-id"); callid != nil {
+	if callid := msg.GetHeader("call-id"); callid != nil {
 		msg.CallID = callid[0]
-		delete(msg.Headers, "call-id")
+		msg.DeleteHeader("call-id")
 	}
 
-	if cseq_hdr := GetHeader(&msg, "cseq"); cseq_hdr != nil {
+	if cseq_hdr := msg.GetHeader("cseq"); cseq_hdr != nil {
 		msg.CSeq = cseq.Parse(cseq_hdr[0])
-		delete(msg.Headers, "cseq")
+		msg.DeleteHeader("cseq")
 	}
 
-	if contacts := GetHeader(&msg, "contact"); contacts != nil {
+	if contacts := msg.GetHeader("contact"); contacts != nil {
 		msg.Contacts = make([]*contact.SIPContact, 0)
 		for _, cont := range contacts {
 			msg.Contacts = append(msg.Contacts, contact.Parse(cont))
 		}
-		delete(msg.Headers, "contact")
+		msg.DeleteHeader("contact")
 	}
 
 	msg.TopmostVia = via.Parse(msg.Headers["via"][0])
@@ -160,14 +160,99 @@ func Parse(data []byte) (*SIPMessage, error) {
 	return &msg, nil
 }
 
+func Serialize(msg *SIPMessage) []byte {
+	var builder strings.Builder
+
+	// Serialize the start line
+	if msg.Request != nil {
+		builder.WriteString(fmt.Sprintf("%s %s SIP/%s", msg.Request.Method, uri.Serialize(msg.Request.RequestURI), "2.0"))
+	} else if msg.Response != nil {
+		builder.WriteString(fmt.Sprintf("SIP/%s %d %s", "2.0", msg.Response.StatusCode, msg.Response.ReasonPhrase))
+	} else {
+		return nil
+	}
+
+	// Serialize the From header
+	if msg.From != nil {
+		builder.WriteString(fmt.Sprintf("From: %s\r\n", fromto.Serialize(msg.From)))
+	}
+
+	// Serialize the To header
+	if msg.To != nil {
+		builder.WriteString(fmt.Sprintf("To: %s\r\n", fromto.Serialize(msg.To)))
+	}
+
+	// Serialize the CSeq header
+	if msg.CSeq != nil {
+		builder.WriteString(fmt.Sprintf("CSeq: %s\r\n", cseq.Serialize(msg.CSeq)))
+	}
+
+	// Serialize the Call-ID header
+	if msg.CallID != "" {
+		builder.WriteString(fmt.Sprintf("Call-ID: %s\r\n", msg.CallID))
+	}
+
+	// Serialize the Contact headers
+	for _, contc := range msg.Contacts {
+		builder.WriteString(fmt.Sprintf("Contact: %s\r\n", contact.Serialize(contc)))
+	}
+
+	// Serialize the topmost Via header
+	if msg.TopmostVia != nil {
+		builder.WriteString(fmt.Sprintf("Via: %s\r\n", via.Serialize(msg.TopmostVia)))
+	}
+
+	if vias := msg.GetHeader("via"); vias != nil {
+		for _, via := range vias {
+			builder.WriteString(fmt.Sprintf("%s: %s\r\n", "via", via))
+		}
+		msg.DeleteHeader("via")
+	}
+
+	// Serialize other headers
+	for name, values := range msg.Headers {
+		for _, value := range values {
+			builder.WriteString(fmt.Sprintf("%s: %s\r\n", name, value))
+		}
+	}
+
+	// Add a blank line to separate headers from the body
+	builder.WriteString("\r\n")
+
+	// Serialize the body
+	if len(msg.Body) > 0 {
+		builder.WriteString(string(msg.Body))
+	}
+
+	// Convert the builder content to a byte slice and return
+	return []byte(builder.String())
+}
+
+func DeepCopy(msg *SIPMessage) *SIPMessage {
+	
+}
+
 // GetHeader returns the values of a specific header
-func GetHeader(msg *SIPMessage, header string) []string {
+func (msg SIPMessage) GetHeader(header string) []string {
 	values, exists := msg.Headers[header]
 	if !exists {
 		return nil
 	} else {
 		return values
 	}
+}
+
+func (msg *SIPMessage) AddVia(v *via.SIPVia) {
+	prependString(msg.Headers["via"], via.Serialize(msg.TopmostVia))
+	msg.TopmostVia = v
+}
+
+func (msg *SIPMessage) AddHeader(header string, value string) {
+	msg.Headers[header] = append(msg.Headers[header], value)
+}
+
+func (msg *SIPMessage) DeleteHeader(header string) {
+	delete(msg.Headers, header)
 }
 
 func GetValue(header string) string {
@@ -285,10 +370,10 @@ func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 	  	stateless proxies.
 	*/
 	ack_hdr := make(map[string][]string)
-	if sessionid := GetHeader(inv, "session-id"); sessionid != nil {
+	if sessionid := inv.GetHeader("session-id"); sessionid != nil {
 		ack_hdr["session-id"] = sessionid
 	}
-	routes := GetHeader(inv, "route")
+	routes := inv.GetHeader("route")
 	ack_hdr["route"] = routes
 
 	return &SIPMessage{
@@ -306,7 +391,14 @@ func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 			Method: "ACK",
 			Seq:    inv.CSeq.Seq,
 		},
-		Headers: ack_hdr,
+		Headers:   ack_hdr,
 		Transport: inv.Transport,
 	}
+}
+
+func prependString(x []string, y string) []string {
+	x = append(x, "")
+	copy(x[1:], x)
+	x[0] = y
+	return x
 }

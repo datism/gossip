@@ -80,7 +80,7 @@ type Ictrans struct {
 
 // Make creates a new instance of a client transaction, initializing timers and setting initial state
 func Make(
-    message *message.SIPMessage,  // The INVITE message to be processed
+    message message.SIPMessage,  // The INVITE message to be processed
     transport_callback func(transaction.Transaction, util.Event),  // Transport layer callback
     core_callback func(transaction.Transaction, util.Event),  // Core callback
 ) *Ictrans {
@@ -89,7 +89,7 @@ func Make(
     timerd := util.NewTimer()   // Timer D for completion timeout
 
     return &Ictrans{
-        message: message,        // The initial SIP message (INVITE)
+        message: &message,        // The initial SIP message (INVITE)
         transc:  make(chan util.Event), // Channel to communicate events
         timers:  [3]util.Timer{timera, timerb, timerd}, // Initialize timers
         state:   calling,         // Start with the calling state
@@ -204,10 +204,10 @@ func (trans *Ictrans) handle_msg(ev util.Event) {
 
 // call_core_callback invokes the core callback to handle transaction-related events
 func call_core_callback(citrans *Ictrans, ev util.Event) {
-    go citrans.core_cb(citrans, ev)  // Call the core callback in a new goroutine
+    citrans.core_cb(citrans, ev)  // Call the core callback in a new goroutine
 }
 
 // call_transport_callback invokes the transport callback to send or receive messages
 func call_transport_callback(citrans *Ictrans, ev util.Event) {
-    go citrans.trpt_cb(citrans, ev)  // Call the transport callback in a new goroutine
+    citrans.trpt_cb(citrans, ev)  // Call the transport callback in a new goroutine
 }

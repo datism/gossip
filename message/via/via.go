@@ -80,3 +80,37 @@ func parseParams(params string, via *SIPVia) {
 		}
 	}
 }
+
+func Serialize(via *SIPVia) string {
+	var result strings.Builder
+
+	// Add protocol
+	if via.Proto != "" {
+		result.WriteString("SIP/2.0/")
+		result.WriteString(via.Proto)
+	}
+
+	// Add domain and port
+	result.WriteString(" ")
+	result.WriteString(via.Domain)
+	if via.Port > 0 {
+		result.WriteString(":")
+		result.WriteString(strconv.Itoa(via.Port))
+	}
+
+	// Add branch parameter
+	if via.Branch != "" {
+		result.WriteString(";branch=")
+		result.WriteString(via.Branch)
+	}
+
+	// Add other options
+	for k, v := range via.Opts {
+		result.WriteString(";")
+		result.WriteString(k)
+		result.WriteString("=")
+		result.WriteString(v)
+	}
+
+	return result.String()
+}

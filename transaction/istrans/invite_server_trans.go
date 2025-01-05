@@ -90,7 +90,7 @@ type Sitrans struct {
 
 // Make creates and initializes a new Sitrans instance with the given message and callbacks
 func Make(
-	message *message.SIPMessage,
+	message message.SIPMessage,
 	transport_callback func(transaction.Transaction, util.Event),
 	core_callback func(transaction.Transaction, util.Event),
 ) *Sitrans {
@@ -102,7 +102,7 @@ func Make(
 
 	// Return a new Sitrans instance with the provided parameters
 	return &Sitrans{
-		message: message,
+		message: &message,
 		transc:  make(chan util.Event),  // Channel for event communication
 		timers:  [4]util.Timer{timerprv, timerg, timerdh, timeri}, // Initialize the timers array
 		state:   proceeding, // Initial state is "proceeding"
@@ -238,10 +238,10 @@ func (trans *Sitrans) handle_msg(ev util.Event) {
 
 // call_core_callback invokes the core callback with the provided event
 func call_core_callback(sitrans *Sitrans, ev util.Event) {
-	go sitrans.core_cb(sitrans, ev) // Call the core callback asynchronously
+	sitrans.core_cb(sitrans, ev) // Call the core callback asynchronously
 }
 
 // call_transport_callback invokes the transport callback with the provided event
 func call_transport_callback(sitrans *Sitrans, ev util.Event) {
-	go sitrans.trpt_cb(sitrans, ev) // Call the transport callback asynchronously
+	sitrans.trpt_cb(sitrans, ev) // Call the transport callback asynchronously
 }
