@@ -34,7 +34,7 @@ func TestNormalScenario(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(*update, mockTransportCallback, mockCoreCallback)
+	trans := Make(update, mockTransportCallback, mockCoreCallback)
 
 	// 1. invite -> proceeding (send inv to core)
 	trans.Start()

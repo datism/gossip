@@ -16,6 +16,40 @@ type SIPContact struct {
 	Supported []string
 }
 
+func (contact *SIPContact) DeepCopy() *SIPContact {
+	// Deep copy the Uri field
+	var newUri *uri.SIPUri
+	if contact.Uri != nil {
+		newUri = contact.Uri.DeepCopy() // Use SIPUri's DeepCopy method
+	}
+
+	// Deep copy the Paras map
+	var newParas map[string]string
+	if contact.Paras != nil {
+		newParas = make(map[string]string)
+		for key, value := range contact.Paras {
+			newParas[key] = value
+		}
+	}
+
+	// Deep copy the Supported slice
+	var newSupported []string
+	if contact.Supported != nil {
+		newSupported = make([]string, len(contact.Supported))
+		copy(newSupported, contact.Supported)
+	}
+
+	// Return the deep copied SIPContact
+	return &SIPContact{
+		DisName:   contact.DisName,
+		Uri:       newUri,
+		Qvalue:    contact.Qvalue,
+		Expire:    contact.Expire,
+		Paras:     newParas,
+		Supported: newSupported,
+	}
+}
+
 func Parse(contact string) *SIPContact {
 	var sip_contact SIPContact
 

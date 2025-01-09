@@ -228,8 +228,79 @@ func Serialize(msg *SIPMessage) []byte {
 	return []byte(builder.String())
 }
 
-func DeepCopy(msg *SIPMessage) *SIPMessage {
-	
+func (msg SIPMessage) DeepCopy() *SIPMessage {
+	// Deep copy the From field
+	var newFrom *fromto.SIPFromTo
+	if msg.From != nil {
+		newFrom = msg.From.DeepCopy()
+	}
+
+	// Deep copy the To field
+	var newTo *fromto.SIPFromTo
+	if msg.To != nil {
+		newTo = msg.To.DeepCopy()
+	}
+
+	// Deep copy the CSeq field
+	var newCSeq *cseq.SIPCseq
+	if msg.CSeq != nil {
+		newCSeq = msg.CSeq.DeepCopy()
+	}
+
+	// Deep copy the Contacts slice
+	var newContacts []*contact.SIPContact
+	if msg.Contacts != nil {
+		newContacts = make([]*contact.SIPContact, len(msg.Contacts))
+		for i, contact := range msg.Contacts {
+			if contact != nil {
+				newContacts[i] = contact.DeepCopy()
+			}
+		}
+	}
+
+	// Deep copy the TopmostVia field
+	var newTopmostVia *via.SIPVia
+	if msg.TopmostVia != nil {
+		newTopmostVia = msg.TopmostVia.DeepCopy()
+	}
+
+	// Deep copy the Headers map
+	var newHeaders map[string][]string
+	if msg.Headers != nil {
+		newHeaders = make(map[string][]string)
+		for key, values := range msg.Headers {
+			newValues := make([]string, len(values))
+			copy(newValues, values)
+			newHeaders[key] = newValues
+		}
+	}
+
+	// Deep copy the Body slice
+	var newBody []byte
+	if msg.Body != nil {
+		newBody = make([]byte, len(msg.Body))
+		copy(newBody, msg.Body)
+	}
+
+	// Deep copy the Transport field
+	var newTransport *transport.Transport
+	if msg.Transport != nil {
+		newTransport = msg.Transport.DeepCopy()
+	}
+
+	// Return the new deep copied SIPMessage
+	return &SIPMessage{
+		Startline:  msg.Startline, // Assuming Startline is a value type (struct or primitive)
+		From:       newFrom,
+		To:         newTo,
+		CSeq:       newCSeq,
+		CallID:     msg.CallID,
+		Contacts:   newContacts,
+		TopmostVia: newTopmostVia,
+		Headers:    newHeaders,
+		Body:       newBody,
+		Transport:  newTransport,
+	}
 }
 
 // GetHeader returns the values of a specific header
@@ -373,8 +444,10 @@ func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 	if sessionid := inv.GetHeader("session-id"); sessionid != nil {
 		ack_hdr["session-id"] = sessionid
 	}
-	routes := inv.GetHeader("route")
-	ack_hdr["route"] = routes
+	if routes := inv.GetHeader("route"); routes != nil {
+		ack_hdr["route"] = routes
+	}
+	
 
 	return &SIPMessage{
 		Startline: Startline{

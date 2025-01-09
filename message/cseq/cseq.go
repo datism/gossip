@@ -11,6 +11,13 @@ type SIPCseq struct {
 	Seq    int
 }
 
+func (cseq SIPCseq) DeepCopy() *SIPCseq {
+	return &SIPCseq{
+		Method: cseq.Method,
+		Seq:    cseq.Seq,
+	}
+}
+
 func Parse(cseq string) *SIPCseq {
 	var sip_cseq SIPCseq
 

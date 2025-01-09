@@ -80,7 +80,7 @@ type Ictrans struct {
 
 // Make creates a new instance of a client transaction, initializing timers and setting initial state
 func Make(
-    message message.SIPMessage,  // The INVITE message to be processed
+    message *message.SIPMessage,  // The INVITE message to be processed
     transport_callback func(transaction.Transaction, util.Event),  // Transport layer callback
     core_callback func(transaction.Transaction, util.Event),  // Core callback
 ) *Ictrans {
@@ -89,7 +89,7 @@ func Make(
     timerd := util.NewTimer()   // Timer D for completion timeout
 
     return &Ictrans{
-        message: &message,        // The initial SIP message (INVITE)
+        message: message.DeepCopy(),        // The initial SIP message (INVITE)
         transc:  make(chan util.Event), // Channel to communicate events
         timers:  [3]util.Timer{timera, timerb, timerd}, // Initialize timers
         state:   calling,         // Start with the calling state
@@ -111,7 +111,7 @@ func (trans *Ictrans) Start() {
 // start is the main loop that processes events in the client transaction.
 func (trans *Ictrans) start() {
     // Initial action: Call transport callback to send INVITE message
-    call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
+    call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message.DeepCopy()})
     // Start Timer A (T1) for retransmissions and Timer B (64*T1) for transaction timeout
     trans.timers[timer_a].Start(tia_dur)
     trans.timers[timer_b].Start(tib_dur)
@@ -156,10 +156,10 @@ func (trans *Ictrans) handle_event(ev util.Event) {
 // handle_timer processes timeout events, which can trigger retransmissions or state transitions
 func (trans *Ictrans) handle_timer(ev util.Event) {
     if ev.Data == timer_b {  // Timer B expired, inform TU of timeout and terminate transaction
-        call_core_callback(trans, util.Event{Type: util.TIMEOUT, Data: trans.message})
+        call_core_callback(trans, util.Event{Type: util.TIMEOUT, Data: trans.message.DeepCopy()})
         trans.state = terminated
     } else if ev.Data == timer_a && trans.state == calling {  // Timer A expired in calling state, retransmit INVITE
-        call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
+        call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message.DeepCopy()})
         trans.timers[timer_a].Start(trans.timers[timer_a].Duration() * 2)  // Double Timer A duration
     } else if ev.Data == timer_d && trans.state == completed {  // Timer D expired in completed state, terminate transaction
         trans.state = terminated
@@ -190,14 +190,14 @@ func (trans *Ictrans) handle_msg(ev util.Event) {
         if trans.state < completed {  // If in calling or proceeding state, generate ACK and stop Timer B
             call_core_callback(trans, ev)
             ack := message.MakeGenericAck(trans.message, response)  // Create an ACK for the response
-            call_transport_callback(trans, util.Event{Type: util.MESS, Data: ack})  // Send the ACK
+            call_transport_callback(trans, util.Event{Type: util.MESS, Data: ack.DeepCopy()})  // Send the ACK
 
             trans.timers[timer_b].Stop()  // Stop Timer B (transaction timeout)
             trans.timers[timer_d].Start(tid_dur)  // Start Timer D (completion timeout)
             trans.state = completed  // Transition to completed state
         } else if trans.state == completed {  // In completed state, just retransmit the ACK
             ack := message.MakeGenericAck(trans.message, response)
-            call_transport_callback(trans, util.Event{Type: util.MESS, Data: ack})
+            call_transport_callback(trans, util.Event{Type: util.MESS, Data: ack.DeepCopy()})
         }
     }
 }
