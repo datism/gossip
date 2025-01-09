@@ -45,7 +45,7 @@ type NIctrans struct {
 
 // Make creates and initializes a new NIctrans instance with the given message and callbacks
 func Make(
-	message message.SIPMessage,
+	message *message.SIPMessage,
 	transport_callback func(transaction.Transaction, util.Event),
 	core_callback func(transaction.Transaction, util.Event),
 ) *NIctrans {
@@ -56,7 +56,7 @@ func Make(
 
 	// Return a new NIctrans instance with the provided parameters
 	return &NIctrans{
-		message: &message,
+		message: message.DeepCopy(),
 		transc:  make(chan util.Event),                 // Channel for event communication
 		timers:  [3]util.Timer{timerE, timerF, timerK}, // Initialize the timers array
 		state:   trying,                                // Initial state is "trying"
@@ -81,7 +81,7 @@ func (trans *NIctrans) start() {
 	trans.timers[timer_f].Start(tif_dur)
 
 	// Send the request to the transport layer
-	call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
+	call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message.DeepCopy()})
 
 	// Set Timer E for retransmission to fire at T1
 	trans.timers[timer_e].Start(tie_dur)
@@ -124,10 +124,10 @@ func (trans *NIctrans) handle_event(ev util.Event) {
 // handle_timeout processes timeout events (Timer E, F, K)
 func (trans *NIctrans) handle_timeout(ev util.Event) {
 	if ev.Data == timer_f && trans.state < completed {  // Timer F expired, inform TU of timeout and terminate transaction
-        call_core_callback(trans, util.Event{Type: util.TIMEOUT, Data: trans.message})
+        call_core_callback(trans, util.Event{Type: util.TIMEOUT, Data: trans.message.DeepCopy()})
         trans.state = terminated
     } else if ev.Data == timer_e && trans.state < completed {  // Timer E expired in trying, proceeding state, retransmit request
-        call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
+        call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.message.DeepCopy()})
         trans.timers[timer_e].Start(min(trans.timers[timer_e].Duration() * 2, t2))  // Double Timer E duration
     } else if ev.Data == timer_k && trans.state == completed {  // Timer D expired in completed state, terminate transaction
         trans.state = terminated

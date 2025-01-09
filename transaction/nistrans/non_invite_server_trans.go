@@ -39,7 +39,7 @@ type NIstrans struct {
 
 // Make creates and initializes a new NIstrans instance with the given message and callbacks
 func Make(
-	message message.SIPMessage,
+	message *message.SIPMessage,
 	transport_callback func(transaction.Transaction, util.Event),
 	core_callback func(transaction.Transaction, util.Event),
 ) *NIstrans {
@@ -48,7 +48,7 @@ func Make(
 
 	// Return a new NIstrans instance with the provided parameters
 	return &NIstrans{
-		message: &message,
+		message: message.DeepCopy(),
 		transc:  make(chan util.Event), // Channel for event communication
 		timers:  [1]util.Timer{timerJ}, // Initialize Timer J
 		state:   trying,                // Initial state is "trying"
@@ -70,7 +70,7 @@ func (trans *NIstrans) Start() {
 // start begins the transaction state machine, listening for events and handling state transitions
 func (trans *NIstrans) start() {
 	// Send the request to the core for handling
-	call_core_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
+	call_core_callback(trans, util.Event{Type: util.MESS, Data: trans.message.DeepCopy()})
 
 	trans.timers[timer_j].Start(tij_dur)
 
@@ -122,7 +122,7 @@ func (trans *NIstrans) handle_message(ev util.Event) {
 
 	if msg.Request != nil {
 		if trans.state == proceeding || trans.state == completed {
-			call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res})
+			call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res.DeepCopy()})
 		}
 
 		return
@@ -136,7 +136,7 @@ func (trans *NIstrans) handle_message(ev util.Event) {
 		trans.state = proceeding
 
 		// Send provisional response to transport layer
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg})
+		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg.DeepCopy()})
 
 	} else if status_code >= 200 && status_code <= 699 {
 		// Final response (2xx-6xx): Move to Completed state
@@ -145,7 +145,7 @@ func (trans *NIstrans) handle_message(ev util.Event) {
 		trans.state = completed
 
 		// Send final response to transport layer
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg})
+		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg.DeepCopy()})
 
 		// Set Timer J for retransmissions (if unreliable transport)
 		trans.timers[timer_j].Start(tij_dur)

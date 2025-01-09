@@ -90,7 +90,7 @@ type Sitrans struct {
 
 // Make creates and initializes a new Sitrans instance with the given message and callbacks
 func Make(
-	message message.SIPMessage,
+	message *message.SIPMessage,
 	transport_callback func(transaction.Transaction, util.Event),
 	core_callback func(transaction.Transaction, util.Event),
 ) *Sitrans {
@@ -102,7 +102,7 @@ func Make(
 
 	// Return a new Sitrans instance with the provided parameters
 	return &Sitrans{
-		message: &message,
+		message: message.DeepCopy(),
 		transc:  make(chan util.Event),  // Channel for event communication
 		timers:  [4]util.Timer{timerprv, timerg, timerdh, timeri}, // Initialize the timers array
 		state:   proceeding, // Initial state is "proceeding"
@@ -174,15 +174,15 @@ func (trans *Sitrans) handle_timer(ev util.Event) {
 	// Handle the event based on which timer expired
 	if ev.Data == timer_h {
 		// Timer H expired: Transaction is terminated due to timeout
-		call_core_callback(trans, util.Event{Type: util.TIMEOUT, Data: trans.message})
+		call_core_callback(trans, util.Event{Type: util.TIMEOUT, Data: trans.message.DeepCopy()})
 		trans.state = terminated
 	} else if ev.Data == timer_prv && trans.state == proceeding {
 		// Timer Prv expired: Send 100 TRYING response
 		trying100 := message.MakeGenericResponse(100, "TRYING", trans.message)
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: trying100})
+		call_transport_callback(trans, util.Event{Type: util.MESS, Data: trying100.DeepCopy()})
 	} else if ev.Data == timer_g && trans.state == completed {
 		// Timer G expired: Retransmit the last response and restart Timer G with adjusted duration
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res})
+		call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res.DeepCopy()})
 		trans.timers[timer_g].Start(min(2*trans.timers[timer_g].Duration(), t2))
 	} else if ev.Data == timer_i && trans.state == confirmed {
 		// Timer I expired: Move to the terminated state (final step)
@@ -210,7 +210,7 @@ func (trans *Sitrans) handle_msg(ev util.Event) {
 
 		if msg.Request.Method == "INVITE" && trans.state == completed {
 			// Received an INVITE request in the "completed" state: Retransmit the last response
-			call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res})
+			call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res.DeepCopy()})
 		}
 
 		return // Return early if the message is an ACK or INVITE

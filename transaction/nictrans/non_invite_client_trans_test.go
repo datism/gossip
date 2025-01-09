@@ -34,7 +34,7 @@ func TestNormalScenario(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(*update, mockTransportCallback, mockCoreCallback)
+	trans := Make(update, mockTransportCallback, mockCoreCallback)
 
 	// 1. update -> calling (send invite to transport)
 	trans.Start()
@@ -83,7 +83,7 @@ func TestTimeoutTimer(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(*update, mockTransportCallback, mockCoreCallback)
+	trans := Make(update, mockTransportCallback, mockCoreCallback)
 
 	// 1. invite -> calling (send invite to transport)
 	trans.Start()

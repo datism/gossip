@@ -34,11 +34,11 @@ func HandleMessage(transport *transport.Transport, msg *message.SIPMessage) {
 
 		if msg.Request.Method == "ACK" {
 			log.Debug().Msg("Cannot start new transaction with ack request...process stateless")
-			//do something
+			Stateless_route(msg)
 			return
 		}
 
-		log.Debug().Msg("Create start transaction with trans id: " + tid.String())
+		Statefull_route(msg)
 	}
 }
 
@@ -60,6 +60,8 @@ func StartServerTransaction(
 	} else {
 		trans = nistrans.Make(msg, tranport_cb, core_cb)
 	}
+
+	log.Debug().Msg("Start server transaction with trans id: " + tid.String())
 
 	m.Store(&tid, trans)
 	go trans.Start()
@@ -85,6 +87,8 @@ func StartClientTransaction(
 	} else {
 		trans = nictrans.Make(msg, tranport_cb, core_cb)
 	}
+
+	log.Debug().Msg("Start client transaction with trans id: " + tid.String())
 
 	m.Store(&tid, trans)
 	go trans.Start()

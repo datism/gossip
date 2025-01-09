@@ -9,6 +9,8 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+
+	"github.com/rs/zerolog/log"
 )
 
 func Statefull_route(request *message.SIPMessage) {
@@ -52,7 +54,7 @@ func Statefull_route(request *message.SIPMessage) {
 	})
 	request.Transport = &DestTransport
 
-	_ = StartServerTransaction(request, ctrans_cb, trpt_cb)
+	_ = StartClientTransaction(request, ctrans_cb, trpt_cb)
 
 	for {
 		select {
@@ -62,7 +64,10 @@ func Statefull_route(request *message.SIPMessage) {
 				if !ok {
 					continue
 				}
-				server_trans.Event(ev)
+
+				log.Debug().Msg("Forward response to server transaction")
+				response.RemoveVia()
+				server_trans.Event(util.Event{Type: util.MESS, Data: &response})
 
 				status := response.Response.StatusCode
 				if status >= 200 && status < 300 {
@@ -80,7 +85,33 @@ func Statefull_route(request *message.SIPMessage) {
 }
 
 func Stateless_route(request *message.SIPMessage) {
+	if request.Request == nil {
+		return
+	}
 
+	to_uri := request.To.Uri
+	address := net.JoinHostPort(to_uri.Domain, strconv.Itoa(to_uri.Port))
+	DestAddr, err := net.ResolveUDPAddr("udp", address)
+	if err != nil {
+		return
+	}
+	DestTransport := transport.Transport{
+		Protocol:   "UDP",
+		Conn:       request.Transport.Conn,
+		LocalAddr:  request.Transport.LocalAddr,
+		RemoteAddr: DestAddr,
+	}
+
+	bin := message.Serialize(request)
+	if bin == nil {
+		//serialize error
+		return
+	}
+
+	_, err = DestTransport.Conn.WriteToUDP(bin, DestTransport.RemoteAddr)
+	if err != nil {
+		log.Error().Msg("Transport error")
+	}
 }
 
 func trpt_cb(from transaction.Transaction, ev util.Event) {
@@ -99,10 +130,9 @@ func trpt_cb(from transaction.Transaction, ev util.Event) {
 	_, err := trprt.Conn.WriteToUDP(bin, trprt.RemoteAddr)
 	if err != nil {
 		//error transport error
+		log.Error().Msg("Transport error")
 		from.Event(util.Event{Type: util.ERROR, Data: msg})
 	}
-
-	return
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
