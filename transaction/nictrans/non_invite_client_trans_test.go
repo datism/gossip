@@ -34,7 +34,8 @@ func TestNormalScenario(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(update, mockTransportCallback, mockCoreCallback)
+	transID := transaction.TransID{BranchID: "branch1", Method: "UPDATE", SentBy: "localhost"}
+	trans := Make(transID, update, mockTransportCallback, mockCoreCallback)
 
 	// 1. update -> calling (send invite to transport)
 	trans.Start()
@@ -83,7 +84,8 @@ func TestTimeoutTimer(t *testing.T) {
 	}
 
 	// Create a new Citrans instance
-	trans := Make(update, mockTransportCallback, mockCoreCallback)
+	transID := transaction.TransID{BranchID: "branch1", Method: "UPDATE", SentBy: "localhost"}
+	trans := Make(transID, update, mockTransportCallback, mockCoreCallback)
 
 	// 1. invite -> calling (send invite to transport)
 	trans.Start()

@@ -291,9 +291,14 @@ func (msg SIPMessage) DeepCopy() *SIPMessage {
 	// Deep copy the Startline
 	var newStartline Startline
 	if msg.Request != nil {
+		var newRequestURI *uri.SIPUri
+		if msg.Request.RequestURI != nil {
+			newRequestURI = msg.Request.RequestURI.DeepCopy()
+		}
+
 		newStartline.Request = &Request{
 			Method:     msg.Request.Method,
-			RequestURI: msg.Request.RequestURI.DeepCopy(),
+			RequestURI: newRequestURI,
 		}
 	}
 	if msg.Response != nil {
