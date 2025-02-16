@@ -53,40 +53,40 @@ func main() {
 		copy(data, buffer[:n])
 
 		// Handle each message in a new goroutine
-		handleMessage(conn, clientAddr, data)
+		go handleMessage(conn, clientAddr, data)
 	}
 }
 
 func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().Msgf("Recovered in handleMessage: %v", r)
+		}
+	}()
+
 	// Log received message
 	log.Info().
 		Int("bytes", len(data)).
 		Str("client", clientAddr.String()).
-		// Str("message", string(data)).
 		Msg("Received message")
-
-	// // Example: echo the message back to the client
-	// _, err := conn.WriteToUDP(data, clientAddr)
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("Error writing to UDP socket")
-	// }
 
 	msg, err := message.Parse(data)
 	if err != nil {
 		log.Error().Err(err).Msg("Error parsing SIP request")
+		return
 	}
 
-	udp_addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	udpAddr, ok := conn.LocalAddr().(*net.UDPAddr)
 	if !ok {
-		return
+		log.Error().Msg("Error asserting local address to UDPAddr")
 	}
 
 	transport := &transport.Transport{
 		Protocol:   "UDP",
 		Conn:       conn,
-		LocalAddr:  udp_addr,
+		LocalAddr:  udpAddr,
 		RemoteAddr: clientAddr,
 	}
-
-	core.HandleMessage(transport, msg)
+	msg.Transport = transport
+	core.HandleMessage(msg)
 }

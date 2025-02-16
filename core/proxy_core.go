@@ -67,10 +67,10 @@ func Statefull_route(request *message.SIPMessage) {
 
 				log.Debug().Msg("Forward response to server transaction")
 				response.RemoveVia()
-				server_trans.Event(util.Event{Type: util.MESS, Data: &response})
+				server_trans.Event(util.Event{Type: util.MESS, Data: response})
 
 				status := response.Response.StatusCode
-				if status >= 200 && status < 300 {
+				if status >= 200 {
 					return
 				}
 			} else if ev.Type == util.ERROR {

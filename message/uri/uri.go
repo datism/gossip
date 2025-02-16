@@ -17,36 +17,35 @@ type SIPUri struct {
 }
 
 func (uri SIPUri) DeepCopy() *SIPUri {
-    // Deep copy the Opts map
-    var newOpts map[string]string
-    if uri.Opts != nil {
-        newOpts = make(map[string]string)
-        for key, value := range uri.Opts {
-            newOpts[key] = value
-        }
-    }
+	// Deep copy the Opts map
+	var newOpts map[string]string
+	if uri.Opts != nil {
+		newOpts = make(map[string]string)
+		for key, value := range uri.Opts {
+			newOpts[key] = value
+		}
+	}
 
-    // Deep copy the Headers map
-    var newHeaders map[string]string
-    if uri.Headers != nil {
-        newHeaders = make(map[string]string)
-        for key, value := range uri.Headers {
-            newHeaders[key] = value
-        }
-    }
+	// Deep copy the Headers map
+	var newHeaders map[string]string
+	if uri.Headers != nil {
+		newHeaders = make(map[string]string)
+		for key, value := range uri.Headers {
+			newHeaders[key] = value
+		}
+	}
 
-    // Return the deep copied SIPUri
-    return &SIPUri{
-        Scheme:  uri.Scheme,
-        User:    uri.User,
-        Pass:    uri.Pass,
-        Domain:  uri.Domain,
-        Port:    uri.Port,
-        Opts:    newOpts,
-        Headers: newHeaders,
-    }
+	// Return the deep copied SIPUri
+	return &SIPUri{
+		Scheme:  uri.Scheme,
+		User:    uri.User,
+		Pass:    uri.Pass,
+		Domain:  uri.Domain,
+		Port:    uri.Port,
+		Opts:    newOpts,
+		Headers: newHeaders,
+	}
 }
-
 
 func Parse(uri string) *SIPUri {
 	var sip_uri SIPUri

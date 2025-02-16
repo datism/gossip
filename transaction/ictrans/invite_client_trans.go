@@ -105,7 +105,7 @@ func (trans Ictrans) Event(event util.Event) {
 
 // Start begins the processing of the client transaction, invoking the transport callback and starting timers.
 func (trans *Ictrans) Start() {
-    go trans.start()  // Start processing in a separate goroutine to handle events asynchronously
+    trans.start()  // Start processing in a separate goroutine to handle events asynchronously
 }
 
 // start is the main loop that processes events in the client transaction.

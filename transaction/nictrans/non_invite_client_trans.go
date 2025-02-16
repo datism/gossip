@@ -72,7 +72,7 @@ func (trans NIctrans) Event(event util.Event) {
 
 // Start initiates the transaction processing by running the start method in a goroutine
 func (trans *NIctrans) Start() {
-	go trans.start() // Start the transaction processing asynchronously
+	trans.start() // Start the transaction processing asynchronously
 }
 
 // start begins the transaction state machine, listening for events and handling state transitions

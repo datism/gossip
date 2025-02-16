@@ -12,33 +12,32 @@ type SIPFromTo struct {
 }
 
 func (ft SIPFromTo) DeepCopy() *SIPFromTo {
-    // Deep copy the Uri field
-    var newUri *uri.SIPUri
-    if ft.Uri != nil {
-        newUri = ft.Uri.DeepCopy() // Use SIPUri's DeepCopy method
-    }
+	// Deep copy the Uri field
+	var newUri *uri.SIPUri
+	if ft.Uri != nil {
+		newUri = ft.Uri.DeepCopy() // Use SIPUri's DeepCopy method
+	}
 
-    // Deep copy the Paras map
-    var newParas map[string]string
-    if ft.Paras != nil {
-        newParas = make(map[string]string)
-        for key, value := range ft.Paras {
-            newParas[key] = value
-        }
-    }
+	// Deep copy the Paras map
+	var newParas map[string]string
+	if ft.Paras != nil {
+		newParas = make(map[string]string)
+		for key, value := range ft.Paras {
+			newParas[key] = value
+		}
+	}
 
-    // Return the deep copied SIPFromTo
-    return &SIPFromTo{
-        Uri:   newUri,
-        Tag:   ft.Tag,
-        Paras: newParas,
-    }
+	// Return the deep copied SIPFromTo
+	return &SIPFromTo{
+		Uri:   newUri,
+		Tag:   ft.Tag,
+		Paras: newParas,
+	}
 }
-
 
 func Parse(fromto string) *SIPFromTo {
 	var sip_fromto SIPFromTo
-	
+
 	sip_fromto.Paras = make(map[string]string)
 
 	ag_begin := strings.Index(fromto, "<")

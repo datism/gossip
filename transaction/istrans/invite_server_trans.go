@@ -1,9 +1,9 @@
 package istrans
 
 import (
-	"gossip/util"
 	"gossip/message"
 	"gossip/transaction"
+	"gossip/util"
 )
 
 //      		  |INVITE
@@ -49,15 +49,15 @@ import (
 //              +-----------+
 
 // Define the timer constants as per RFC
-const t1 = 500    // Timer T1 duration (500ms)
-const t2 = 4000   // Timer T2 duration (4000ms)
-const t4 = 5000   // Timer T4 duration (5000ms)
+const t1 = 500  // Timer T1 duration (500ms)
+const t2 = 4000 // Timer T2 duration (4000ms)
+const t4 = 5000 // Timer T4 duration (5000ms)
 
 // Define durations for specific timers used in the state machine
-const tiprv_dur = 200    // Provisional response timer duration (200ms)
-const tig_dur = t1       // Timer G duration (T1)
-const tih_dur = 64 * t1  // Timer H duration (64 * T1)
-const tii_dur = t4       // Timer I duration (T4)
+const tiprv_dur = 200   // Provisional response timer duration (200ms)
+const tig_dur = t1      // Timer G duration (T1)
+const tih_dur = 64 * t1 // Timer H duration (64 * T1)
+const tii_dur = t4      // Timer I duration (T4)
 
 // Enum-like constants for different timer indices
 const (
@@ -71,19 +71,19 @@ const (
 type state int
 
 const (
-	proceeding state = iota   // In this state, the server is processing the request
-	completed                // Transaction is completed, waiting for ACK or further responses
-	confirmed                // ACK received, transaction confirmed
-	terminated               // The transaction is finished (either successfully or failed)
+	proceeding state = iota // In this state, the server is processing the request
+	completed               // Transaction is completed, waiting for ACK or further responses
+	confirmed               // ACK received, transaction confirmed
+	terminated              // The transaction is finished (either successfully or failed)
 )
 
 // Sitrans represents the state machine for an INVITE transaction
 type Sitrans struct {
-	state    state               // Current state of the transaction
-	message  *message.SIPMessage // The SIP message associated with the transaction
-	last_res *message.SIPMessage // The last response received
-	timers   [4]util.Timer       // List of timers used for managing retransmissions and timeouts
-	transc   chan util.Event    // Channel for receiving events like timeouts or messages
+	state    state                                     // Current state of the transaction
+	message  *message.SIPMessage                       // The SIP message associated with the transaction
+	last_res *message.SIPMessage                       // The last response received
+	timers   [4]util.Timer                             // List of timers used for managing retransmissions and timeouts
+	transc   chan util.Event                           // Channel for receiving events like timeouts or messages
 	trpt_cb  func(transaction.Transaction, util.Event) // Callback for transport layer
 	core_cb  func(transaction.Transaction, util.Event) // Callback for core layer (application logic)
 }
@@ -103,11 +103,11 @@ func Make(
 	// Return a new Sitrans instance with the provided parameters
 	return &Sitrans{
 		message: message.DeepCopy(),
-		transc:  make(chan util.Event),  // Channel for event communication
+		transc:  make(chan util.Event),                            // Channel for event communication
 		timers:  [4]util.Timer{timerprv, timerg, timerdh, timeri}, // Initialize the timers array
-		state:   proceeding, // Initial state is "proceeding"
-		trpt_cb: transport_callback, // Transport callback for message transmission
-		core_cb: core_callback, // Core callback for message handling in the application logic
+		state:   proceeding,                                       // Initial state is "proceeding"
+		trpt_cb: transport_callback,                               // Transport callback for message transmission
+		core_cb: core_callback,                                    // Core callback for message handling in the application logic
 	}
 }
 
@@ -118,16 +118,16 @@ func (trans Sitrans) Event(event util.Event) {
 
 // Start initiates the transaction processing by running the start method in a goroutine
 func (trans *Sitrans) Start() {
-	go trans.start() // Start the transaction processing asynchronously
+	trans.start() // Start the transaction processing asynchronously
 }
 
 // start begins the transaction state machine, listening for events and handling state transitions
 func (trans *Sitrans) start() {
 	// Start the timer for provisional responses (Timer Prv)
 	trans.timers[timer_prv].Start(tiprv_dur)
-	
+
 	// Call the core callback with the original message
-	call_core_callback(trans, util.Event{Type: util.MESS, Data: trans.message})
+	call_core_callback(trans, util.Event{Type: util.MESS, Data: trans.message.DeepCopy()})
 
 	// Define a variable to hold incoming events
 	var ev util.Event
@@ -218,6 +218,7 @@ func (trans *Sitrans) handle_msg(ev util.Event) {
 
 	// Handle SIP responses based on their status code
 	status_code := msg.Response.StatusCode
+	msg.Transport = trans.message.Transport
 	if status_code >= 100 && status_code < 200 && trans.state == proceeding {
 		// Provisional responses (1xx): Send them to the transport layer
 		trans.timers[timer_prv].Stop() // Stop Timer Prv if a provisional response is received
@@ -231,7 +232,7 @@ func (trans *Sitrans) handle_msg(ev util.Event) {
 		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg})
 		trans.timers[timer_g].Start(tig_dur) // Start Timer G for retransmissions
 		trans.timers[timer_h].Start(tih_dur) // Start Timer H for retransmissions
-		trans.last_res = msg // Save the last response
+		trans.last_res = msg                 // Save the last response
 		trans.state = completed
 	}
 }

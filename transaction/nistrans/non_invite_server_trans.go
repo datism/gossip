@@ -64,7 +64,7 @@ func (trans NIstrans) Event(event util.Event) {
 
 // Start initiates the transaction processing by running the start method in a goroutine
 func (trans *NIstrans) Start() {
-	go trans.start() // Start the transaction processing asynchronously
+	trans.start() // Start the transaction processing asynchronously
 }
 
 // start begins the transaction state machine, listening for events and handling state transitions
@@ -128,10 +128,11 @@ func (trans *NIstrans) handle_message(ev util.Event) {
 		return
 	}
 
+	msg.Transport = trans.message.Transport
 	status_code := msg.Response.StatusCode
 	if status_code >= 100 && status_code < 200 {
 		// Provisional response (1xx): Move to Proceeding state
-		call_core_callback(trans, ev)
+		call_core_callback(trans, util.Event{Type: util.MESS, Data: msg.DeepCopy()})
 		trans.last_res = msg
 		trans.state = proceeding
 
@@ -140,7 +141,7 @@ func (trans *NIstrans) handle_message(ev util.Event) {
 
 	} else if status_code >= 200 && status_code <= 699 {
 		// Final response (2xx-6xx): Move to Completed state
-		call_core_callback(trans, ev)
+		call_core_callback(trans, util.Event{Type: util.MESS, Data: msg.DeepCopy()})
 		trans.last_res = msg
 		trans.state = completed
 

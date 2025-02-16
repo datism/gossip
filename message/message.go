@@ -174,7 +174,7 @@ func Serialize(msg *SIPMessage) []byte {
 
 	// Serialize the From header
 	if msg.From != nil {
-		builder.WriteString(fmt.Sprintf("From: %s\r\n", fromto.Serialize(msg.From)))
+		builder.WriteString(fmt.Sprintf("\r\nFrom: %s\r\n", fromto.Serialize(msg.From)))
 	}
 
 	// Serialize the To header
@@ -288,9 +288,24 @@ func (msg SIPMessage) DeepCopy() *SIPMessage {
 		newTransport = msg.Transport.DeepCopy()
 	}
 
+	// Deep copy the Startline
+	var newStartline Startline
+	if msg.Request != nil {
+		newStartline.Request = &Request{
+			Method:     msg.Request.Method,
+			RequestURI: msg.Request.RequestURI.DeepCopy(),
+		}
+	}
+	if msg.Response != nil {
+		newStartline.Response = &Response{
+			StatusCode:   msg.Response.StatusCode,
+			ReasonPhrase: msg.Response.ReasonPhrase,
+		}
+	}
+
 	// Return the new deep copied SIPMessage
 	return &SIPMessage{
-		Startline:  msg.Startline, // Assuming Startline is a value type (struct or primitive)
+		Startline:  newStartline,
 		From:       newFrom,
 		To:         newTo,
 		CSeq:       newCSeq,
@@ -472,10 +487,3 @@ func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
 		Transport: inv.Transport,
 	}
 }
-
-// func prependString(x []string, y string) []string {
-// 	x = append(x, "")
-// 	copy(x[1:], x)
-// 	x[0] = y
-// 	return x
-// }

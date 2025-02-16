@@ -7,7 +7,6 @@ import (
 	"gossip/transaction/istrans"
 	"gossip/transaction/nictrans"
 	"gossip/transaction/nistrans"
-	"gossip/transport"
 	"gossip/util"
 	"sync"
 
@@ -16,18 +15,13 @@ import (
 
 var m sync.Map
 
-func HandleMessage(transport *transport.Transport, msg *message.SIPMessage) {
-	tid, err := transaction.MakeTransactionID(msg)
-	if err != nil {
-		log.Error().Err(err).Msg("Cannot create transaction ID")
-		return
-	}
+func HandleMessage(msg *message.SIPMessage) {
+	log.Debug().Str("event", "handle_sip_message").Interface("sip_message", msg).Msg("Handle message")
 
-	if trans := FindTransaction(tid); trans != nil {
-		log.Debug().Msg("Found transaction")
+	if trans := FindTransaction(msg); trans != nil {
 		trans.Event(util.Event{Type: util.MESS, Data: msg})
 	} else {
-		if msg.Request != nil {
+		if msg.Request == nil {
 			log.Error().Msg("Cannot start new transaction with response")
 			return
 		}
@@ -47,9 +41,9 @@ func StartServerTransaction(
 	core_cb func(transaction.Transaction, util.Event),
 	tranport_cb func(transaction.Transaction, util.Event),
 ) transaction.Transaction {
-	tid, err := transaction.MakeTransactionID(msg)
-	if err != nil {
-		log.Error().Err(err).Msg("Cannot create transaction ID")
+	tid := transaction.MakeServerTransactionID(msg)
+	if tid == nil {
+		log.Error().Msg("Cannot create transaction ID")
 		return nil
 	}
 
@@ -63,7 +57,7 @@ func StartServerTransaction(
 
 	log.Debug().Msg("Start server transaction with trans id: " + tid.String())
 
-	m.Store(&tid, trans)
+	m.Store(*tid, trans)
 	go trans.Start()
 	return trans
 }
@@ -74,9 +68,9 @@ func StartClientTransaction(
 	tranport_cb func(transaction.Transaction, util.Event),
 ) transaction.Transaction {
 
-	tid, err := transaction.MakeTransactionID(msg)
-	if err != nil {
-		log.Error().Err(err).Msg("Cannot create transaction ID")
+	tid := transaction.MakeClientTransactionID(msg)
+	if tid == nil {
+		log.Error().Msg("Cannot create transaction ID")
 		return nil
 	}
 
@@ -90,16 +84,27 @@ func StartClientTransaction(
 
 	log.Debug().Msg("Start client transaction with trans id: " + tid.String())
 
-	m.Store(&tid, trans)
+	m.Store(*tid, trans)
 	go trans.Start()
 	return trans
 }
 
-func FindTransaction(transID *transaction.TransID) transaction.Transaction {
-	if trans, ok := m.Load(transID); ok {
-		if transCom, ok := trans.(transaction.Transaction); ok {
-			return transCom
-		}
+func FindTransaction(msg *message.SIPMessage) transaction.Transaction {
+	var tid *transaction.TransID
+	if msg.Request != nil {
+		tid = transaction.MakeServerTransactionID(msg)
+	} else {
+		tid = transaction.MakeClientTransactionID(msg)
+	}
+
+	if tid == nil {
+		log.Error().Msg("Cannot create transaction ID")
+		return nil
+	}
+
+	if result, ok := m.Load(*tid); ok {
+		log.Debug().Msg("Found transaction with ID: " + tid.String())
+		return result.(transaction.Transaction)
 	}
 
 	return nil

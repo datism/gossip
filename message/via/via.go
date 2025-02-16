@@ -14,25 +14,24 @@ type SIPVia struct {
 }
 
 func (via SIPVia) DeepCopy() *SIPVia {
-    // Deep copy the Opts map
-    var newOpts map[string]string
-    if via.Opts != nil {
-        newOpts = make(map[string]string)
-        for key, value := range via.Opts {
-            newOpts[key] = value
-        }
-    }
+	// Deep copy the Opts map
+	var newOpts map[string]string
+	if via.Opts != nil {
+		newOpts = make(map[string]string)
+		for key, value := range via.Opts {
+			newOpts[key] = value
+		}
+	}
 
-    // Return the deep copied SIPVia
-    return &SIPVia{
-        Proto:  via.Proto,
-        Domain: via.Domain,
-        Port:   via.Port,
-        Branch: via.Branch,
-        Opts:   newOpts,
-    }
+	// Return the deep copied SIPVia
+	return &SIPVia{
+		Proto:  via.Proto,
+		Domain: via.Domain,
+		Port:   via.Port,
+		Branch: via.Branch,
+		Opts:   newOpts,
+	}
 }
-
 
 func Parse(via string) *SIPVia {
 	var sip_via SIPVia

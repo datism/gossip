@@ -21,6 +21,7 @@ gossip
 # Go workspace file
 go.work
 go.work.sum
+.vscode
 
 # env file
 .env

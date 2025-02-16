@@ -2,6 +2,7 @@ package test
 
 import (
 	"gossip/message"
+	// "gossip/message/cseq"
 	"gossip/message/cseq"
 	"gossip/message/via"
 	"gossip/transaction"
@@ -9,11 +10,11 @@ import (
 	"testing"
 )
 
-func TestMakeTransactionIDFromRequest(t *testing.T) {
+func TestMakeClientTransactionIDFromRequest(t *testing.T) {
 	data := &message.SIPMessage{
 		Startline: message.Startline{
 			Request: &message.Request{
-				Method:     "INVITE",
+				Method: "INVITE",
 			},
 		},
 		TopmostVia: &via.SIPVia{
@@ -25,12 +26,12 @@ func TestMakeTransactionIDFromRequest(t *testing.T) {
 	expected := &transaction.TransID{
 		BranchID: "123",
 		Method:   "INVITE",
-		SentBy:   "server10.biloxi.com",
+		SentBy:   "",
 	}
 
-	tid, err := transaction.MakeTransactionID(data)
-	if err != nil {
-		t.Fatalf("Error make transaction ID: %v", err)
+	tid := transaction.MakeClientTransactionID(data)
+	if tid == nil {
+		t.Fatalf("Error make transaction ID")
 	}
 
 	if !reflect.DeepEqual(tid, expected) {
@@ -38,7 +39,7 @@ func TestMakeTransactionIDFromRequest(t *testing.T) {
 	}
 }
 
-func TestMakeTransactionIDFromResponse(t *testing.T) {
+func TestMakeClientTransactionIDFromResponse(t *testing.T) {
 	data := &message.SIPMessage{
 		TopmostVia: &via.SIPVia{
 			Branch: "123",
@@ -54,12 +55,41 @@ func TestMakeTransactionIDFromResponse(t *testing.T) {
 		SentBy:   "",
 	}
 
-	tid, err := transaction.MakeTransactionID(data)
-	if err != nil {
-		t.Fatalf("Error make transaction ID: %v", err)
+	tid := transaction.MakeClientTransactionID(data)
+	if tid == nil {
+		t.Fatalf("Error make transaction ID")
 	}
 
 	if !reflect.DeepEqual(tid, expected) {
 		t.Errorf("Make transaction ID from response does not match expected result.\nGot: %+v\nExpected: %+v", tid, expected)
+	}
+}
+
+func TestMakeServerTransactionIDFromRequest(t *testing.T) {
+	data := &message.SIPMessage{
+		Startline: message.Startline{
+			Request: &message.Request{
+				Method: "INVITE",
+			},
+		},
+		TopmostVia: &via.SIPVia{
+			Domain: "server10.biloxi.com",
+			Branch: "123",
+		},
+	}
+
+	expected := &transaction.TransID{
+		BranchID: "123",
+		Method:   "INVITE",
+		SentBy:   "server10.biloxi.com",
+	}
+
+	tid := transaction.MakeServerTransactionID(data)
+	if tid == nil {
+		t.Fatalf("Error make transaction ID")
+	}
+
+	if !reflect.DeepEqual(tid, expected) {
+		t.Errorf("Make transaction ID from request does not match expected result.\nGot: %+v\nExpected: %+v", tid, expected)
 	}
 }
