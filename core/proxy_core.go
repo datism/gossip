@@ -18,11 +18,27 @@ func Statefull_route(request *message.SIPMessage) {
 	ctrans_chan := make(chan util.Event, 3)
 
 	strans_cb := func(from transaction.Transaction, ev util.Event) {
-		strans_chan <- ev
+		if ev.Type == util.ERROR || ev.Type == util.TERMINATED {
+			id, ok := ev.Data.(transaction.TransID)
+			if ok {
+				DeleteTransaction(id)
+			}
+		} else {
+			strans_chan <- ev
+		}
+
 	}
 
 	ctrans_cb := func(from transaction.Transaction, ev util.Event) {
-		ctrans_chan <- ev
+		if ev.Type == util.ERROR || ev.Type == util.TERMINATED {
+			id, ok := ev.Data.(transaction.TransID)
+			if ok {
+				DeleteTransaction(id)
+			}
+		} else {
+			ctrans_chan <- ev
+
+		}
 	}
 
 	server_trans := StartServerTransaction(request, strans_cb, trpt_cb)
@@ -59,7 +75,7 @@ func Statefull_route(request *message.SIPMessage) {
 	for {
 		select {
 		case ev := <-ctrans_chan:
-			if ev.Type == util.MESS {
+			if ev.Type == util.MESSAGE {
 				response, ok := ev.Data.(*message.SIPMessage)
 				if !ok {
 					continue
@@ -67,7 +83,7 @@ func Statefull_route(request *message.SIPMessage) {
 
 				log.Debug().Msg("Forward response to server transaction")
 				response.RemoveVia()
-				server_trans.Event(util.Event{Type: util.MESS, Data: response})
+				server_trans.Event(util.Event{Type: util.MESSAGE, Data: response})
 
 				status := response.Response.StatusCode
 				if status >= 200 {

@@ -38,7 +38,7 @@ func TestNormalScenario(t *testing.T) {
 
 	// 1. invite -> proceeding (send inv to core)
 	trans.Start()
-	assertCallback(t, coreCallbackChan, util.Event{Type: util.MESS, Data: update})
+	assertCallback(t, coreCallbackChan, util.Event{Type: util.MESSAGE, Data: update})
 	assertState(t, trans.state, trying)
 
 	// 2. 200 -> terminated (send 200 to transport)
@@ -49,8 +49,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(util.Event{Type: util.MESS, Data: ok200})
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: ok200})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: ok200})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: ok200})
 	assertState(t, trans.state, completed)
 
 	// 3. timer j -> terminated

@@ -4,6 +4,8 @@ import (
 	"gossip/message"
 	"gossip/transaction"
 	"gossip/util"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Timer constants
@@ -28,6 +30,7 @@ const (
 
 // NIstrans represents the state machine for a Non-Invite Server Transaction
 type NIstrans struct {
+	id       transaction.TransID                       // Transaction ID
 	state    state                                     // Current state of the transaction
 	message  *message.SIPMessage                       // The SIP message associated with the transaction
 	last_res *message.SIPMessage                       // The last response received
@@ -39,6 +42,7 @@ type NIstrans struct {
 
 // Make creates and initializes a new NIstrans instance with the given message and callbacks
 func Make(
+	id transaction.TransID, // Transaction ID
 	message *message.SIPMessage,
 	transport_callback func(transaction.Transaction, util.Event),
 	core_callback func(transaction.Transaction, util.Event),
@@ -46,8 +50,10 @@ func Make(
 	// Create new timers for the transaction state machine
 	timerJ := util.NewTimer() // Timer J for the Completed state
 
+	log.Debug().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new Non-Invite server transaction with message")
 	// Return a new NIstrans instance with the provided parameters
 	return &NIstrans{
+		id:      id, // Set transaction ID
 		message: message.DeepCopy(),
 		transc:  make(chan util.Event), // Channel for event communication
 		timers:  [1]util.Timer{timerJ}, // Initialize Timer J
@@ -64,13 +70,15 @@ func (trans NIstrans) Event(event util.Event) {
 
 // Start initiates the transaction processing by running the start method in a goroutine
 func (trans *NIstrans) Start() {
+	log.Debug().Str("transaction_id", trans.id.String()).Msg("Starting Non-Invite server transaction")
 	trans.start() // Start the transaction processing asynchronously
 }
 
 // start begins the transaction state machine, listening for events and handling state transitions
 func (trans *NIstrans) start() {
 	// Send the request to the core for handling
-	call_core_callback(trans, util.Event{Type: util.MESS, Data: trans.message.DeepCopy()})
+	log.Debug().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request to core")
+	call_core_callback(trans, util.Event{Type: util.MESSAGE, Data: trans.message.DeepCopy()})
 
 	trans.timers[timer_j].Start(tij_dur)
 
@@ -89,6 +97,9 @@ func (trans *NIstrans) start() {
 
 		// If the state is terminated, exit the loop
 		if trans.state == terminated {
+			log.Debug().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
+			call_core_callback(trans, util.Event{Type: util.TERMINATED, Data: trans.id})
+			close(trans.transc) // Close the event channel when the transaction ends
 			break
 		}
 	}
@@ -96,10 +107,11 @@ func (trans *NIstrans) start() {
 
 // handle_event processes different types of events: timeouts and messages
 func (trans *NIstrans) handle_event(ev util.Event) {
+	log.Debug().Str("transaction_id", trans.id.String()).Interface("handle_event", ev).Msgf("Handling event: %v", ev)
 	switch ev.Type {
 	case util.TIMEOUT:
 		trans.handle_timeout(ev)
-	case util.MESS:
+	case util.MESSAGE:
 		trans.handle_message(ev)
 	default:
 		return
@@ -122,7 +134,7 @@ func (trans *NIstrans) handle_message(ev util.Event) {
 
 	if msg.Request != nil {
 		if trans.state == proceeding || trans.state == completed {
-			call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res.DeepCopy()})
+			call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: trans.last_res.DeepCopy()})
 		}
 
 		return
@@ -132,21 +144,21 @@ func (trans *NIstrans) handle_message(ev util.Event) {
 	status_code := msg.Response.StatusCode
 	if status_code >= 100 && status_code < 200 {
 		// Provisional response (1xx): Move to Proceeding state
-		call_core_callback(trans, util.Event{Type: util.MESS, Data: msg.DeepCopy()})
+		call_core_callback(trans, util.Event{Type: util.MESSAGE, Data: msg.DeepCopy()})
 		trans.last_res = msg
 		trans.state = proceeding
 
 		// Send provisional response to transport layer
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg.DeepCopy()})
+		call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: msg.DeepCopy()})
 
 	} else if status_code >= 200 && status_code <= 699 {
 		// Final response (2xx-6xx): Move to Completed state
-		call_core_callback(trans, util.Event{Type: util.MESS, Data: msg.DeepCopy()})
+		call_core_callback(trans, util.Event{Type: util.MESSAGE, Data: msg.DeepCopy()})
 		trans.last_res = msg
 		trans.state = completed
 
 		// Send final response to transport layer
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg.DeepCopy()})
+		call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: msg.DeepCopy()})
 
 		// Set Timer J for retransmissions (if unreliable transport)
 		trans.timers[timer_j].Start(tij_dur)
@@ -155,10 +167,12 @@ func (trans *NIstrans) handle_message(ev util.Event) {
 
 // call_core_callback invokes the core callback with the provided event
 func call_core_callback(trans *NIstrans, ev util.Event) {
+	log.Debug().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling core callback with event")
 	trans.core_cb(trans, ev)
 }
 
 // call_transport_callback invokes the transport callback with the provided event
 func call_transport_callback(trans *NIstrans, ev util.Event) {
+	log.Debug().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling transport callback with event")
 	trans.trpt_cb(trans, ev)
 }

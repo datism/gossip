@@ -19,7 +19,7 @@ func HandleMessage(msg *message.SIPMessage) {
 	log.Debug().Str("event", "handle_sip_message").Interface("sip_message", msg).Msg("Handle message")
 
 	if trans := FindTransaction(msg); trans != nil {
-		trans.Event(util.Event{Type: util.MESS, Data: msg})
+		trans.Event(util.Event{Type: util.MESSAGE, Data: msg})
 	} else {
 		if msg.Request == nil {
 			log.Error().Msg("Cannot start new transaction with response")
@@ -50,9 +50,9 @@ func StartServerTransaction(
 	var trans transaction.Transaction
 
 	if msg.Request.Method == "INVITE" {
-		trans = istrans.Make(msg, tranport_cb, core_cb)
+		trans = istrans.Make(*tid, msg, tranport_cb, core_cb)
 	} else {
-		trans = nistrans.Make(msg, tranport_cb, core_cb)
+		trans = nistrans.Make(*tid, msg, tranport_cb, core_cb)
 	}
 
 	log.Debug().Msg("Start server transaction with trans id: " + tid.String())
@@ -77,9 +77,9 @@ func StartClientTransaction(
 	var trans transaction.Transaction
 
 	if msg.CSeq.Method == "INVITE" {
-		trans = ictrans.Make(msg, tranport_cb, core_cb)
+		trans = ictrans.Make(*tid, msg, tranport_cb, core_cb)
 	} else {
-		trans = nictrans.Make(msg, tranport_cb, core_cb)
+		trans = nictrans.Make(*tid, msg, tranport_cb, core_cb)
 	}
 
 	log.Debug().Msg("Start client transaction with trans id: " + tid.String())
@@ -87,6 +87,11 @@ func StartClientTransaction(
 	m.Store(*tid, trans)
 	go trans.Start()
 	return trans
+}
+
+func DeleteTransaction(tid transaction.TransID) {
+	log.Debug().Msg("Delete transaction with ID: " + tid.String())
+	m.Delete(tid)
 }
 
 func FindTransaction(msg *message.SIPMessage) transaction.Transaction {

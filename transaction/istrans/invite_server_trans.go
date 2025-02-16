@@ -4,6 +4,8 @@ import (
 	"gossip/message"
 	"gossip/transaction"
 	"gossip/util"
+
+	"github.com/rs/zerolog/log"
 )
 
 //      		  |INVITE
@@ -79,6 +81,7 @@ const (
 
 // Sitrans represents the state machine for an INVITE transaction
 type Sitrans struct {
+	id       transaction.TransID                       // Transaction ID
 	state    state                                     // Current state of the transaction
 	message  *message.SIPMessage                       // The SIP message associated with the transaction
 	last_res *message.SIPMessage                       // The last response received
@@ -90,6 +93,7 @@ type Sitrans struct {
 
 // Make creates and initializes a new Sitrans instance with the given message and callbacks
 func Make(
+	id transaction.TransID, // Transaction ID
 	message *message.SIPMessage,
 	transport_callback func(transaction.Transaction, util.Event),
 	core_callback func(transaction.Transaction, util.Event),
@@ -100,8 +104,10 @@ func Make(
 	timerdh := util.NewTimer()
 	timeri := util.NewTimer()
 
+	log.Debug().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new INVITE server transaction with message")
 	// Return a new Sitrans instance with the provided parameters
 	return &Sitrans{
+		id:      id, // Set transaction ID
 		message: message.DeepCopy(),
 		transc:  make(chan util.Event),                            // Channel for event communication
 		timers:  [4]util.Timer{timerprv, timerg, timerdh, timeri}, // Initialize the timers array
@@ -118,6 +124,7 @@ func (trans Sitrans) Event(event util.Event) {
 
 // Start initiates the transaction processing by running the start method in a goroutine
 func (trans *Sitrans) Start() {
+	log.Debug().Str("transaction_id", trans.id.String()).Msg("Starting INVITE server transaction")
 	trans.start() // Start the transaction processing asynchronously
 }
 
@@ -127,7 +134,8 @@ func (trans *Sitrans) start() {
 	trans.timers[timer_prv].Start(tiprv_dur)
 
 	// Call the core callback with the original message
-	call_core_callback(trans, util.Event{Type: util.MESS, Data: trans.message.DeepCopy()})
+	log.Debug().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request to core")
+	call_core_callback(trans, util.Event{Type: util.MESSAGE, Data: trans.message.DeepCopy()})
 
 	// Define a variable to hold incoming events
 	var ev util.Event
@@ -152,6 +160,9 @@ func (trans *Sitrans) start() {
 
 		// If the state is terminated, break the loop and stop the transaction
 		if trans.state == terminated {
+			log.Debug().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
+			call_core_callback(trans, util.Event{Type: util.TERMINATED, Data: trans.id})
+			close(trans.transc) // Close the event channel when the transaction ends
 			break
 		}
 	}
@@ -159,10 +170,11 @@ func (trans *Sitrans) start() {
 
 // handle_event processes different types of events: timeouts and messages
 func (ctx *Sitrans) handle_event(ev util.Event) {
+	log.Debug().Str("transaction_id", ctx.id.String()).Interface("handle_event", ev).Msgf("Handling event: %v", ev)
 	switch ev.Type {
 	case util.TIMEOUT: // Handle timeout events (timer expirations)
 		ctx.handle_timer(ev)
-	case util.MESS: // Handle received messages (SIP responses)
+	case util.MESSAGE: // Handle received messages (SIP responses)
 		ctx.handle_msg(ev)
 	default:
 		return // If the event type is not recognized, do nothing
@@ -179,10 +191,10 @@ func (trans *Sitrans) handle_timer(ev util.Event) {
 	} else if ev.Data == timer_prv && trans.state == proceeding {
 		// Timer Prv expired: Send 100 TRYING response
 		trying100 := message.MakeGenericResponse(100, "TRYING", trans.message)
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: trying100.DeepCopy()})
+		call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: trying100.DeepCopy()})
 	} else if ev.Data == timer_g && trans.state == completed {
 		// Timer G expired: Retransmit the last response and restart Timer G with adjusted duration
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res.DeepCopy()})
+		call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: trans.last_res.DeepCopy()})
 		trans.timers[timer_g].Start(min(2*trans.timers[timer_g].Duration(), t2))
 	} else if ev.Data == timer_i && trans.state == confirmed {
 		// Timer I expired: Move to the terminated state (final step)
@@ -210,7 +222,7 @@ func (trans *Sitrans) handle_msg(ev util.Event) {
 
 		if msg.Request.Method == "INVITE" && trans.state == completed {
 			// Received an INVITE request in the "completed" state: Retransmit the last response
-			call_transport_callback(trans, util.Event{Type: util.MESS, Data: trans.last_res.DeepCopy()})
+			call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: trans.last_res.DeepCopy()})
 		}
 
 		return // Return early if the message is an ACK or INVITE
@@ -222,14 +234,14 @@ func (trans *Sitrans) handle_msg(ev util.Event) {
 	if status_code >= 100 && status_code < 200 && trans.state == proceeding {
 		// Provisional responses (1xx): Send them to the transport layer
 		trans.timers[timer_prv].Stop() // Stop Timer Prv if a provisional response is received
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg})
+		call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: msg})
 	} else if status_code >= 200 && status_code <= 300 && trans.state == proceeding {
 		// Final 2xx responses: Transition to terminated state
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg})
+		call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: msg})
 		trans.state = terminated
 	} else if status_code > 300 {
 		// Error responses (3xx-6xx): Transition to "completed" state
-		call_transport_callback(trans, util.Event{Type: util.MESS, Data: msg})
+		call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: msg})
 		trans.timers[timer_g].Start(tig_dur) // Start Timer G for retransmissions
 		trans.timers[timer_h].Start(tih_dur) // Start Timer H for retransmissions
 		trans.last_res = msg                 // Save the last response
@@ -239,10 +251,12 @@ func (trans *Sitrans) handle_msg(ev util.Event) {
 
 // call_core_callback invokes the core callback with the provided event
 func call_core_callback(sitrans *Sitrans, ev util.Event) {
+	log.Debug().Str("transaction_id", sitrans.id.String()).Interface("send_event", ev).Msgf("Calling core callback with event")
 	sitrans.core_cb(sitrans, ev) // Call the core callback asynchronously
 }
 
 // call_transport_callback invokes the transport callback with the provided event
 func call_transport_callback(sitrans *Sitrans, ev util.Event) {
+	log.Debug().Str("transaction_id", sitrans.id.String()).Interface("send_event", ev).Msgf("Calling transport callback with event")
 	sitrans.trpt_cb(sitrans, ev) // Call the transport callback asynchronously
 }

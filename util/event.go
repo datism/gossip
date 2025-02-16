@@ -3,9 +3,10 @@ package util
 type EventType int
 
 const (
-	MESS = iota
+	MESSAGE = iota
 	TIMEOUT
 	ERROR
+	TERMINATED
 )
 
 type Event struct {

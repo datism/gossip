@@ -1,9 +1,9 @@
 package istrans
 
 import (
-	"gossip/util"
 	"gossip/message"
 	"gossip/transaction"
+	"gossip/util"
 	"reflect"
 	"testing"
 	"time"
@@ -38,7 +38,7 @@ func TestNormalScenario(t *testing.T) {
 
 	// 1. invite -> proceeding (send inv to core)
 	trans.Start()
-	assertCallback(t, coreCallbackChan, util.Event{Type: util.MESS, Data: invite})
+	assertCallback(t, coreCallbackChan, util.Event{Type: util.MESSAGE, Data: invite})
 	assertState(t, trans.state, proceeding)
 
 	// 2. 100 -> proceeding (send 100 to transport)
@@ -49,8 +49,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(util.Event{Type: util.MESS, Data: trying100})
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: trying100})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: trying100})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: trying100})
 	assertState(t, trans.state, proceeding)
 
 	// 3. 183 -> proceeding (send 183 to transport)
@@ -61,8 +61,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(util.Event{Type: util.MESS, Data: proceeding183})
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: proceeding183})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: proceeding183})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: proceeding183})
 	assertState(t, trans.state, proceeding)
 
 	// 4. 180 -> proceeding (send 180 to transport)
@@ -73,8 +73,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(util.Event{Type: util.MESS, Data: ringing180})
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: ringing180})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: ringing180})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: ringing180})
 	assertState(t, trans.state, proceeding)
 
 	// 5. 200 -> terminated (send 200 to transport)
@@ -85,8 +85,8 @@ func TestNormalScenario(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(util.Event{Type: util.MESS, Data: ok200})
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: ok200})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: ok200})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: ok200})
 	assertState(t, trans.state, terminated)
 }
 
@@ -119,7 +119,7 @@ func TestErrorResponse(t *testing.T) {
 
 	// 1. invite -> proceeding (send inv to core)
 	trans.Start()
-	assertCallback(t, coreCallbackChan, util.Event{Type: util.MESS, Data: inviteMessage})
+	assertCallback(t, coreCallbackChan, util.Event{Type: util.MESSAGE, Data: inviteMessage})
 	assertState(t, trans.state, proceeding)
 
 	// 2. 100 -> proceeding (send 100 to transport)
@@ -130,8 +130,8 @@ func TestErrorResponse(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(util.Event{Type: util.MESS, Data: trying100})
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: trying100})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: trying100})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: trying100})
 	assertState(t, trans.state, proceeding)
 
 	// 3. 3xx -> completed (send 3xx to transport)
@@ -142,8 +142,8 @@ func TestErrorResponse(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(util.Event{Type: util.MESS, Data: notfound404})
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 4. ACK -> confirmed
@@ -154,7 +154,7 @@ func TestErrorResponse(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(util.Event{Type: util.MESS, Data: ack})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: ack})
 	sleep(1)
 	assertState(t, trans.state, confirmed)
 
@@ -193,13 +193,13 @@ func TestTimeoutTimer(t *testing.T) {
 
 	// 1. invite -> calling (send invite to core)
 	trans.Start()
-	assertCallback(t, coreCallbackChan, util.Event{Type: util.MESS, Data: invite})
+	assertCallback(t, coreCallbackChan, util.Event{Type: util.MESSAGE, Data: invite})
 	assertState(t, trans.state, proceeding)
 
 	// 2. timer prv -> proceeding (send 100 to transport)
 	trying100 := message.MakeGenericResponse(100, "TRYING", invite)
 	sleep(tiprv_dur)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: trying100})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: trying100})
 	assertState(t, trans.state, proceeding)
 
 	// 3. 3xx -> completed (send 3xx to transport)
@@ -210,63 +210,63 @@ func TestTimeoutTimer(t *testing.T) {
 			},
 		},
 	}
-	trans.Event(util.Event{Type: util.MESS, Data: notfound404})
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 4. invite -> completed (send 300 to transport)
-	trans.Event(util.Event{Type: util.MESS, Data: invite})
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	trans.Event(util.Event{Type: util.MESSAGE, Data: invite})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 5. timer g -> completed (send 300 to transport)
 	sleep(tig_dur)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 6. timer g -> completed (send 300 to transport)
 	sleep(2 * tig_dur)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 7. timer g -> completed (send 300 to transport)
 	sleep(4 * tig_dur)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 8. timer g -> completed (send 300 to transport)
 	sleep(t2)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 9. timer g -> completed (send 300 to transport)
 	sleep(t2)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 10. timer g -> completed (send 300 to transport)
 	sleep(t2)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 11. timer g -> completed (send 300 to transport)
 	sleep(t2)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 12. timer g -> completed (send 300 to transport)
 	sleep(t2)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 13. timer g -> completed (send 300 to transport)
 	sleep(t2)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 14. timer g -> completed (send 300 to transport)
 	sleep(t2)
-	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESS, Data: notfound404})
+	assertCallback(t, transportCallbackChan, util.Event{Type: util.MESSAGE, Data: notfound404})
 	assertState(t, trans.state, completed)
 
 	// 15. timer h -> termiated (send timeout to core)

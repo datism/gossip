@@ -58,12 +58,6 @@ func main() {
 }
 
 func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Error().Msgf("Recovered in handleMessage: %v", r)
-		}
-	}()
-
 	// Log received message
 	log.Info().
 		Int("bytes", len(data)).
