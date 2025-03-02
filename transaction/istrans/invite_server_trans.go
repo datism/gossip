@@ -104,12 +104,12 @@ func Make(
 	timerdh := util.NewTimer()
 	timeri := util.NewTimer()
 
-	log.Debug().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new INVITE server transaction with message")
+	log.Trace().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new INVITE server transaction with message")
 	// Return a new Sitrans instance with the provided parameters
 	return &Sitrans{
 		id:      id, // Set transaction ID
 		message: message.DeepCopy(),
-		transc:  make(chan util.Event),                            // Channel for event communication
+		transc:  make(chan util.Event, 5),                         // Channel for event communication
 		timers:  [4]util.Timer{timerprv, timerg, timerdh, timeri}, // Initialize the timers array
 		state:   proceeding,                                       // Initial state is "proceeding"
 		trpt_cb: transport_callback,                               // Transport callback for message transmission
@@ -119,12 +119,16 @@ func Make(
 
 // Event is used to send events to the transaction, which are handled in the start() method
 func (trans Sitrans) Event(event util.Event) {
+	if trans.state == terminated {
+		return
+	}
+
 	trans.transc <- event // Push the event to the transc channel for processing
 }
 
 // Start initiates the transaction processing by running the start method in a goroutine
 func (trans *Sitrans) Start() {
-	log.Debug().Str("transaction_id", trans.id.String()).Msg("Starting INVITE server transaction")
+	log.Trace().Str("transaction_id", trans.id.String()).Msg("Starting INVITE server transaction")
 	trans.start() // Start the transaction processing asynchronously
 }
 
@@ -134,7 +138,7 @@ func (trans *Sitrans) start() {
 	trans.timers[timer_prv].Start(tiprv_dur)
 
 	// Call the core callback with the original message
-	log.Debug().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request to core")
+	log.Trace().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request to core")
 	call_core_callback(trans, util.Event{Type: util.MESSAGE, Data: trans.message.DeepCopy()})
 
 	// Define a variable to hold incoming events
@@ -160,7 +164,7 @@ func (trans *Sitrans) start() {
 
 		// If the state is terminated, break the loop and stop the transaction
 		if trans.state == terminated {
-			log.Debug().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
+			log.Trace().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
 			call_core_callback(trans, util.Event{Type: util.TERMINATED, Data: trans.id})
 			close(trans.transc) // Close the event channel when the transaction ends
 			break
@@ -170,7 +174,7 @@ func (trans *Sitrans) start() {
 
 // handle_event processes different types of events: timeouts and messages
 func (ctx *Sitrans) handle_event(ev util.Event) {
-	log.Debug().Str("transaction_id", ctx.id.String()).Interface("handle_event", ev).Msgf("Handling event: %v", ev)
+	log.Trace().Str("transaction_id", ctx.id.String()).Interface("handle_event", ev).Msgf("Handling event: %v", ev)
 	switch ev.Type {
 	case util.TIMEOUT: // Handle timeout events (timer expirations)
 		ctx.handle_timer(ev)
@@ -251,12 +255,12 @@ func (trans *Sitrans) handle_msg(ev util.Event) {
 
 // call_core_callback invokes the core callback with the provided event
 func call_core_callback(sitrans *Sitrans, ev util.Event) {
-	log.Debug().Str("transaction_id", sitrans.id.String()).Interface("send_event", ev).Msgf("Calling core callback with event")
+	log.Trace().Str("transaction_id", sitrans.id.String()).Interface("send_event", ev).Msgf("Calling core callback with event")
 	sitrans.core_cb(sitrans, ev) // Call the core callback asynchronously
 }
 
 // call_transport_callback invokes the transport callback with the provided event
 func call_transport_callback(sitrans *Sitrans, ev util.Event) {
-	log.Debug().Str("transaction_id", sitrans.id.String()).Interface("send_event", ev).Msgf("Calling transport callback with event")
+	log.Trace().Str("transaction_id", sitrans.id.String()).Interface("send_event", ev).Msgf("Calling transport callback with event")
 	sitrans.trpt_cb(sitrans, ev) // Call the transport callback asynchronously
 }

@@ -92,11 +92,11 @@ func Make(
 	timerb := util.NewTimer() // Timer B for transaction timeout
 	timerd := util.NewTimer() // Timer D for completion timeout
 
-	log.Debug().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new INVITE client transaction with message")
+	log.Trace().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new INVITE client transaction with message")
 	return &Ictrans{
 		id:      id,                                    // Set transaction ID
 		message: message.DeepCopy(),                    // The initial SIP message (INVITE)
-		transc:  make(chan util.Event),                 // Channel to communicate events
+		transc:  make(chan util.Event, 5),              // Channel to communicate events
 		timers:  [3]util.Timer{timera, timerb, timerd}, // Initialize timers
 		state:   calling,                               // Start with the calling state
 		trpt_cb: transport_callback,                    // Set transport callback
@@ -106,19 +106,23 @@ func Make(
 
 // Event triggers an event in the transaction. The event can be a SIP message or timeout.
 func (trans Ictrans) Event(event util.Event) {
+	if trans.state == terminated {
+		return
+	}
+
 	trans.transc <- event
 }
 
 // Start begins the processing of the client transaction, invoking the transport callback and starting timers.
 func (trans *Ictrans) Start() {
-	log.Debug().Str("transaction_id", trans.id.String()).Msg("Starting INVITE client transaction")
+	log.Trace().Str("transaction_id", trans.id.String()).Msg("Starting INVITE client transaction")
 	trans.start() // Start processing in a separate goroutine to handle events asynchronously
 }
 
 // start is the main loop that processes events in the client transaction.
 func (trans *Ictrans) start() {
 	// Initial action: Call transport callback to send INVITE message
-	log.Debug().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request")
+	log.Trace().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request")
 	call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: trans.message.DeepCopy()})
 	// Start Timer A (T1) for retransmissions and Timer B (64*T1) for transaction timeout
 	trans.timers[timer_a].Start(tia_dur)
@@ -143,7 +147,7 @@ func (trans *Ictrans) start() {
 
 		// If the transaction is terminated, exit the loop
 		if trans.state == terminated {
-			log.Debug().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
+			log.Trace().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
 			call_core_callback(trans, util.Event{Type: util.TERMINATED, Data: trans.id})
 			close(trans.transc) // Close the event channel when the transaction ends
 			break
@@ -153,7 +157,7 @@ func (trans *Ictrans) start() {
 
 // handle_event processes events, which can be timeouts or received messages
 func (trans *Ictrans) handle_event(ev util.Event) {
-	log.Debug().Str("transaction_id", trans.id.String()).Interface("handle_event", ev).Msg("Handling event")
+	log.Trace().Str("transaction_id", trans.id.String()).Interface("handle_event", ev).Msg("Handling event")
 	switch ev.Type {
 	case util.TIMEOUT:
 		trans.handle_timer(ev) // Handle timeout events (timer expirations)
@@ -218,12 +222,12 @@ func (trans *Ictrans) handle_msg(ev util.Event) {
 
 // call_core_callback invokes the core callback to handle transaction-related events
 func call_core_callback(citrans *Ictrans, ev util.Event) {
-	log.Debug().Str("transaction_id", citrans.id.String()).Interface("send_event", ev).Msg("Calling core callback with event")
+	log.Trace().Str("transaction_id", citrans.id.String()).Interface("send_event", ev).Msg("Calling core callback with event")
 	citrans.core_cb(citrans, ev) // Call the core callback in a new goroutine
 }
 
 // call_transport_callback invokes the transport callback to send or receive messages
 func call_transport_callback(citrans *Ictrans, ev util.Event) {
-	log.Debug().Str("transaction_id", citrans.id.String()).Interface("send_event", ev).Msg("Calling transport callback with event")
+	log.Trace().Str("transaction_id", citrans.id.String()).Interface("send_event", ev).Msg("Calling transport callback with event")
 	citrans.trpt_cb(citrans, ev) // Call the transport callback in a new goroutine
 }

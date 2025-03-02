@@ -58,12 +58,12 @@ func Make(
 	timerF := util.NewTimer() // Timeout Timer
 	timerK := util.NewTimer() // Timer for completed state
 
-	log.Debug().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new Non-Invite client transaction with message")
+	log.Trace().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new Non-Invite client transaction with message")
 	// Return a new NIctrans instance with the provided parameters
 	return &NIctrans{
 		id:      id, // Set transaction ID
 		message: message.DeepCopy(),
-		transc:  make(chan util.Event),                 // Channel for event communication
+		transc:  make(chan util.Event, 5),              // Channel for event communication
 		timers:  [3]util.Timer{timerE, timerF, timerK}, // Initialize the timers array
 		state:   trying,                                // Initial state is "trying"
 		trpt_cb: transport_callback,                    // Transport callback for message transmission
@@ -73,12 +73,16 @@ func Make(
 
 // Event is used to send events to the transaction, which are handled in the start() method
 func (trans NIctrans) Event(event util.Event) {
+	if trans.state == terminated {
+		return
+	}
+
 	trans.transc <- event // Push the event to the transc channel for processing
 }
 
 // Start initiates the transaction processing by running the start method in a goroutine
 func (trans *NIctrans) Start() {
-	log.Debug().Str("transaction_id", trans.id.String()).Msg("Starting Non-Invite client transaction")
+	log.Trace().Str("transaction_id", trans.id.String()).Msg("Starting Non-Invite client transaction")
 	trans.start() // Start the transaction processing asynchronously
 }
 
@@ -88,7 +92,7 @@ func (trans *NIctrans) start() {
 	trans.timers[timer_f].Start(tif_dur)
 
 	// Send the request to the transport layer
-	log.Debug().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request")
+	log.Trace().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request")
 	call_transport_callback(trans, util.Event{Type: util.MESSAGE, Data: trans.message.DeepCopy()})
 
 	// Set Timer E for retransmission to fire at T1
@@ -112,7 +116,7 @@ func (trans *NIctrans) start() {
 
 		// If the state is terminated, exit the loop
 		if trans.state == terminated {
-			log.Debug().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
+			log.Trace().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
 			call_core_callback(trans, util.Event{Type: util.TERMINATED, Data: trans.id})
 			close(trans.transc) // Close the event channel when the transaction ends
 			break
@@ -122,7 +126,7 @@ func (trans *NIctrans) start() {
 
 // handle_event processes different types of events: timeouts and messages
 func (trans *NIctrans) handle_event(ev util.Event) {
-	log.Debug().Str("transaction_id", trans.id.String()).Interface("handle_event", ev).Msgf("Handling event: %v", ev)
+	log.Trace().Str("transaction_id", trans.id.String()).Interface("handle_event", ev).Msgf("Handling event: %v", ev)
 	switch ev.Type {
 	case util.TIMEOUT:
 		trans.handle_timeout(ev)
@@ -168,12 +172,12 @@ func (trans *NIctrans) handle_message(ev util.Event) {
 
 // call_core_callback invokes the core callback with the provided event
 func call_core_callback(trans *NIctrans, ev util.Event) {
-	log.Debug().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling core callback with event")
+	log.Trace().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling core callback with event")
 	trans.core_cb(trans, ev)
 }
 
 // call_transport_callback invokes the transport callback with the provided event
 func call_transport_callback(trans *NIctrans, ev util.Event) {
-	log.Debug().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling transport callback with event")
+	log.Trace().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling transport callback with event")
 	trans.trpt_cb(trans, ev)
 }

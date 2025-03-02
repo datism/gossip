@@ -13,14 +13,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var m sync.Map
+var (
+	mu sync.Mutex
+	m  = make(map[transaction.TransID]transaction.Transaction)
+)
 
 func HandleMessage(msg *message.SIPMessage) {
-	log.Debug().Str("event", "handle_sip_message").Interface("sip_message", msg).Msg("Handle message")
+	log.Trace().Str("event", "handle_sip_message").Interface("sip_message", msg).Msg("Handle message")
 
+	mu.Lock()
 	if trans := FindTransaction(msg); trans != nil {
 		trans.Event(util.Event{Type: util.MESSAGE, Data: msg})
+		mu.Unlock()
 	} else {
+		mu.Unlock()
 		if msg.Request == nil {
 			log.Error().Msg("Cannot start new transaction with response")
 			return
@@ -57,7 +63,9 @@ func StartServerTransaction(
 
 	log.Debug().Msg("Start server transaction with trans id: " + tid.String())
 
-	m.Store(*tid, trans)
+	mu.Lock()
+	m[*tid] = trans
+	mu.Unlock()
 	go trans.Start()
 	return trans
 }
@@ -84,14 +92,18 @@ func StartClientTransaction(
 
 	log.Debug().Msg("Start client transaction with trans id: " + tid.String())
 
-	m.Store(*tid, trans)
+	mu.Lock()
+	m[*tid] = trans
+	mu.Unlock()
 	go trans.Start()
 	return trans
 }
 
 func DeleteTransaction(tid transaction.TransID) {
 	log.Debug().Msg("Delete transaction with ID: " + tid.String())
-	m.Delete(tid)
+	mu.Lock()
+	delete(m, tid)
+	mu.Unlock()
 }
 
 func FindTransaction(msg *message.SIPMessage) transaction.Transaction {
@@ -107,9 +119,9 @@ func FindTransaction(msg *message.SIPMessage) transaction.Transaction {
 		return nil
 	}
 
-	if result, ok := m.Load(*tid); ok {
+	if result, ok := m[*tid]; ok {
 		log.Debug().Msg("Found transaction with ID: " + tid.String())
-		return result.(transaction.Transaction)
+		return result
 	}
 
 	return nil

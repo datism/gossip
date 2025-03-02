@@ -50,34 +50,38 @@ func Make(
 	// Create new timers for the transaction state machine
 	timerJ := util.NewTimer() // Timer J for the Completed state
 
-	log.Debug().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new Non-Invite server transaction with message")
+	log.Trace().Str("transaction_id", id.String()).Interface("sip_message", message).Msg("Creating new Non-Invite server transaction with message")
 	// Return a new NIstrans instance with the provided parameters
 	return &NIstrans{
 		id:      id, // Set transaction ID
 		message: message.DeepCopy(),
-		transc:  make(chan util.Event), // Channel for event communication
-		timers:  [1]util.Timer{timerJ}, // Initialize Timer J
-		state:   trying,                // Initial state is "trying"
-		trpt_cb: transport_callback,    // Transport callback for message transmission
-		core_cb: core_callback,         // Core callback for message handling in the application logic
+		transc:  make(chan util.Event, 5), // Channel for event communication
+		timers:  [1]util.Timer{timerJ},    // Initialize Timer J
+		state:   trying,                   // Initial state is "trying"
+		trpt_cb: transport_callback,       // Transport callback for message transmission
+		core_cb: core_callback,            // Core callback for message handling in the application logic
 	}
 }
 
 // Event is used to send events to the transaction, which are handled in the start() method
 func (trans NIstrans) Event(event util.Event) {
+	if trans.state == terminated {
+		return
+	}
+
 	trans.transc <- event // Push the event to the transc channel for processing
 }
 
 // Start initiates the transaction processing by running the start method in a goroutine
 func (trans *NIstrans) Start() {
-	log.Debug().Str("transaction_id", trans.id.String()).Msg("Starting Non-Invite server transaction")
+	log.Trace().Str("transaction_id", trans.id.String()).Msg("Starting Non-Invite server transaction")
 	trans.start() // Start the transaction processing asynchronously
 }
 
 // start begins the transaction state machine, listening for events and handling state transitions
 func (trans *NIstrans) start() {
 	// Send the request to the core for handling
-	log.Debug().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request to core")
+	log.Trace().Str("transaction_id", trans.id.String()).Msg("Initial action: Sending request to core")
 	call_core_callback(trans, util.Event{Type: util.MESSAGE, Data: trans.message.DeepCopy()})
 
 	trans.timers[timer_j].Start(tij_dur)
@@ -97,7 +101,7 @@ func (trans *NIstrans) start() {
 
 		// If the state is terminated, exit the loop
 		if trans.state == terminated {
-			log.Debug().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
+			log.Trace().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
 			call_core_callback(trans, util.Event{Type: util.TERMINATED, Data: trans.id})
 			close(trans.transc) // Close the event channel when the transaction ends
 			break
@@ -107,7 +111,7 @@ func (trans *NIstrans) start() {
 
 // handle_event processes different types of events: timeouts and messages
 func (trans *NIstrans) handle_event(ev util.Event) {
-	log.Debug().Str("transaction_id", trans.id.String()).Interface("handle_event", ev).Msgf("Handling event: %v", ev)
+	log.Trace().Str("transaction_id", trans.id.String()).Interface("handle_event", ev).Msgf("Handling event: %v", ev)
 	switch ev.Type {
 	case util.TIMEOUT:
 		trans.handle_timeout(ev)
@@ -167,12 +171,12 @@ func (trans *NIstrans) handle_message(ev util.Event) {
 
 // call_core_callback invokes the core callback with the provided event
 func call_core_callback(trans *NIstrans, ev util.Event) {
-	log.Debug().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling core callback with event")
+	log.Trace().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling core callback with event")
 	trans.core_cb(trans, ev)
 }
 
 // call_transport_callback invokes the transport callback with the provided event
 func call_transport_callback(trans *NIstrans, ev util.Event) {
-	log.Debug().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling transport callback with event")
+	log.Trace().Str("transaction_id", trans.id.String()).Interface("send_event", ev).Msgf("Calling transport callback with event")
 	trans.trpt_cb(trans, ev)
 }
