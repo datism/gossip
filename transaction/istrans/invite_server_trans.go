@@ -238,6 +238,7 @@ func (trans *Sitrans) handle_msg(msg *message.SIPMessage) {
 	} else if status_code >= 200 && status_code <= 300 && trans.state == proceeding {
 		// Final 2xx responses: Transition to terminated state
 		trans.state = terminated
+		call_term_callback(trans, transaction.NORMAL)
 		call_transport_callback(trans, msg)
 	} else if status_code > 300 {
 		// Error responses (3xx-6xx): Transition to "completed" state
@@ -259,8 +260,8 @@ func call_core_callback(sitrans *Sitrans, message *message.SIPMessage) {
 func call_transport_callback(sitrans *Sitrans, message *message.SIPMessage) {
 	log.Trace().Str("transaction_id", sitrans.id.String()).Interface("message", message).Msg("Invoking transport callback")
 	if !sitrans.trpt_cb(sitrans.transport, message) { // Call the transport callback
-		call_term_callback(sitrans, transaction.ERROR)
 		sitrans.state = terminated
+		call_term_callback(sitrans, transaction.ERROR)
 	}
 }
 

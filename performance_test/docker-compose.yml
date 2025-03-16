@@ -10,17 +10,14 @@ services:
     volumes:
       - ../..//gossip:/usr/src/gossip
 
-    cpus: 4.0
-    cpuset: "0,1,2,3"
-
     networks:
       mynet:
         ipv4_address: 10.4.0.20
 
     # mem_limit: 4G
     # network_mode: "host"
-    environment:
-      - GOMAXPROCS=4 # Go does not match this by default
+    # environment:
+      # - GOMAXPROCS=4 # Go does not match this by default
       # - GODEBUG=madvdontneed=0
       # - GODEBUG=madvdontneed=1,gctrace=1
       # - GOGC=70

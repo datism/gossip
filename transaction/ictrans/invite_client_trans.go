@@ -233,8 +233,8 @@ func call_core_callback(citrans *Ictrans, message *message.SIPMessage) {
 func call_transport_callback(citrans *Ictrans, message *message.SIPMessage) {
 	log.Trace().Str("transaction_id", citrans.id.String()).Interface("message", message).Msg("Invoking transport callback")
 	if !citrans.trpt_cb(citrans.transport, message) { // Call the transport callback
-		call_term_callback(citrans, transaction.ERROR)
 		citrans.state = terminated
+		call_term_callback(citrans, transaction.ERROR)
 	}
 }
 

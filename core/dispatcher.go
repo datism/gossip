@@ -28,7 +28,7 @@ func HandleMessage(msg *message.SIPMessage, transport *transport.Transport) {
 	} else {
 		mu.Unlock()
 		if msg.Request == nil {
-			log.Error().Msg("Cannot start new transaction with response")
+			//log.Error().Msg("Cannot start new transaction with response")
 			return
 		}
 

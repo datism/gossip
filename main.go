@@ -1,16 +1,23 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"net"
+	"net/http"
 	"os"
+	"runtime"
 
 	"gossip/core"
 	"gossip/message"
 	"gossip/transport"
 
+	"github.com/arl/statsviz"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+
+	_ "net/http/pprof"
 )
 
 func main() {
@@ -32,12 +39,14 @@ func main() {
 	// 	zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339},
 	// 	&lumberjack.Logger{
 	// 		Filename:   "gossip.log",
-	// 		MaxSize:    10,    // Max size in MB
+	// 		MaxSize:    1000,  // Max size in MB
 	// 		MaxBackups: 3,     // Max number of old log files to keep
 	// 		MaxAge:     28,    // Max number of days to keep old log files
 	// 		Compress:   false, // Compress old log files
 	// 	},
 	// ))
+
+	go httpServer(":8080")
 
 	// Create UDP address
 	udpAddr, err := net.ResolveUDPAddr("udp", *addr)
@@ -101,4 +110,34 @@ func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
 		RemoteAddr: clientAddr,
 	}
 	core.HandleMessage(msg, transport)
+}
+
+func httpServer(address string) {
+	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		w.Write([]byte("Alive"))
+	})
+
+	http.HandleFunc("/map_size", func(w http.ResponseWriter, r *http.Request) {
+		data, _ := json.MarshalIndent(core.GetMapSize(), "", "  ")
+		w.WriteHeader(200)
+		w.Write(data)
+	})
+
+	http.HandleFunc("/mem", func(w http.ResponseWriter, r *http.Request) {
+		runtime.GC()
+		stats := &runtime.MemStats{}
+		runtime.ReadMemStats(stats)
+		data, _ := json.MarshalIndent(stats, "", "  ")
+		w.WriteHeader(200)
+		w.Write(data)
+	})
+
+	http.HandleFunc("/debug/pprof/", http.DefaultServeMux.ServeHTTP)
+
+	statsviz.Register(http.DefaultServeMux)
+
+	log.Info().Msgf("Http server started address=%s", address)
+	http.ListenAndServe(address, nil)
 }

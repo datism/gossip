@@ -224,8 +224,8 @@ func call_core_callback(trans *NIctrans, msg *message.SIPMessage) {
 func call_transport_callback(trans *NIctrans, msg *message.SIPMessage) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("message", msg).Msg("Invoking transport callback")
 	if !trans.trpt_cb(trans.transport, msg) {
-		call_term_callback(trans, transaction.ERROR)
 		trans.state = terminated
+		call_term_callback(trans, transaction.ERROR)
 	}
 }
 

@@ -12,17 +12,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func GetMapSize () int {
+	mu.Lock()
+	defer mu.Unlock()
+	return len(m)
+}
+
 func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 	strans_chan := make(chan *message.SIPMessage, 3)
 	ctrans_chan := make(chan *message.SIPMessage, 3)
 
-	term_cb := func(id transaction.TransID, reason transaction.TERM_REASON) {
-		if reason != transaction.NORMAL {
-			log.Error().Str("transaction_id", id.String()).Msg("Transaction terminated with error " + reason.String())
-		} else {
-			log.Debug().Str("transaction_id", id.String()).Msg("Transaction terminated normally")
-		}
-		DeleteTransaction(id)
+	strans_core_cb := func(transport *transport.Transport, message *message.SIPMessage) {
+		strans_chan <- message
+	}
+
+	ctrans_core_cb := func(transport *transport.Transport, message *message.SIPMessage) {
+		ctrans_chan <- message
 	}
 
 	trpt_cb := func(transport *transport.Transport, msg *message.SIPMessage) bool {
@@ -41,15 +46,27 @@ func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 		return true
 	}
 
-	strans_cb := func(transport *transport.Transport, message *message.SIPMessage) {
-		strans_chan <- message
+	strans_term_cb := func(id transaction.TransID, reason transaction.TERM_REASON) {
+		if reason != transaction.NORMAL {
+			log.Error().Str("transaction_id", id.String()).Msg("Transaction terminated with error " + reason.String())
+			strans_chan <- nil
+		} else {
+			log.Debug().Str("transaction_id", id.String()).Msg("Transaction terminated normally")
+		}
+		DeleteTransaction(id)
 	}
 
-	ctrans_cb := func(transport *transport.Transport, message *message.SIPMessage) {
-		ctrans_chan <- message
+	ctrans_term_cb := func(id transaction.TransID, reason transaction.TERM_REASON) {
+		if reason != transaction.NORMAL {
+			log.Error().Str("transaction_id", id.String()).Msg("Transaction terminated with error " + reason.String())
+			ctrans_chan <- nil
+		} else {
+			log.Debug().Str("transaction_id", id.String()).Msg("Transaction terminated normally")
+		}
+		DeleteTransaction(id)
 	}
 
-	server_trans := StartServerTransaction(request, transp, strans_cb, trpt_cb, term_cb)
+	server_trans := StartServerTransaction(request, transp, strans_core_cb, trpt_cb, strans_term_cb)
 
 	request = <-strans_chan
 
@@ -73,23 +90,33 @@ func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 		Branch: randSeq(5),
 	})
 
-	StartClientTransaction(request, dest_transp, ctrans_cb, trpt_cb, term_cb)
+	StartClientTransaction(request, dest_transp, ctrans_core_cb, trpt_cb, ctrans_term_cb)
 
 	for {
-		response := <-ctrans_chan
-
-		log.Debug().Msg("Forward response to server transaction")
-
-		if len(response.Headers["via"]) == 0 {
-			log.Error().Str("transaction_id", "ehh").Interface("handle_message", response).Msg("No via header in response")
-		}
-
-		response.RemoveVia()
-		server_trans.Event(response)
-
-		status := response.Response.StatusCode
-		if status >= 200 {
-			return
+		select {
+		case result := <-strans_chan:
+			if result == nil {
+				return
+			}
+		case response := <-ctrans_chan:
+			if response == nil {
+				log.Error().Msg("Error in client transaction")
+				return
+			}
+	
+			log.Debug().Msg("Forward response to server transaction")
+	
+			if len(response.Headers["via"]) == 0 {
+				log.Error().Str("transaction_id", "ehh").Interface("handle_message", response).Msg("No via header in response")
+			}
+	
+			response.RemoveVia()
+			server_trans.Event(response)
+	
+			status := response.Response.StatusCode
+			if status >= 200 {
+				return
+			}
 		}
 	}
 }
