@@ -5,7 +5,6 @@ import (
 	"gossip/message/via"
 	"gossip/transaction"
 	"gossip/transport"
-	"gossip/util"
 	"math/rand"
 	"net"
 	"strconv"
@@ -13,94 +12,89 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func Statefull_route(request *message.SIPMessage) {
-	strans_chan := make(chan util.Event, 3)
-	ctrans_chan := make(chan util.Event, 3)
+func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
+	strans_chan := make(chan *message.SIPMessage, 3)
+	ctrans_chan := make(chan *message.SIPMessage, 3)
 
-	strans_cb := func(from transaction.Transaction, ev util.Event) {
-		if ev.Type == util.ERROR || ev.Type == util.TERMINATED {
-			id, ok := ev.Data.(transaction.TransID)
-			if ok {
-				DeleteTransaction(id)
-			}
+	term_cb := func(id transaction.TransID, reason transaction.TERM_REASON) {
+		if reason != transaction.NORMAL {
+			log.Error().Str("transaction_id", id.String()).Msg("Transaction terminated with error " + reason.String())
 		} else {
-			strans_chan <- ev
+			log.Debug().Str("transaction_id", id.String()).Msg("Transaction terminated normally")
+		}
+		DeleteTransaction(id)
+	}
+
+	trpt_cb := func(transport *transport.Transport, msg *message.SIPMessage) bool {
+		bin := message.Serialize(msg)
+		if bin == nil {
+			//serialize error
+			return false
 		}
 
-	}
-
-	ctrans_cb := func(from transaction.Transaction, ev util.Event) {
-		if ev.Type == util.ERROR || ev.Type == util.TERMINATED {
-			id, ok := ev.Data.(transaction.TransID)
-			if ok {
-				DeleteTransaction(id)
-			}
-		} else {
-			ctrans_chan <- ev
-
+		_, err := transport.Conn.WriteToUDP(bin, transport.RemoteAddr)
+		if err != nil {
+			//error transport error
+			return false
 		}
+
+		return true
 	}
 
-	server_trans := StartServerTransaction(request, strans_cb, trpt_cb)
-
-	ev := <-strans_chan
-	request, ok := ev.Data.(*message.SIPMessage)
-	if !ok {
-		return
+	strans_cb := func(transport *transport.Transport, message *message.SIPMessage) {
+		strans_chan <- message
 	}
+
+	ctrans_cb := func(transport *transport.Transport, message *message.SIPMessage) {
+		ctrans_chan <- message
+	}
+
+	server_trans := StartServerTransaction(request, transp, strans_cb, trpt_cb, term_cb)
+
+	request = <-strans_chan
 
 	to_uri := request.To.Uri
 	address := net.JoinHostPort(to_uri.Domain, strconv.Itoa(to_uri.Port))
-	DestAddr, err := net.ResolveUDPAddr("udp", address)
+	dest_addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
 		return
 	}
-	DestTransport := transport.Transport{
+	dest_transp := &transport.Transport{
 		Protocol:   "UDP",
-		Conn:       request.Transport.Conn,
-		LocalAddr:  request.Transport.LocalAddr,
-		RemoteAddr: DestAddr,
+		Conn:       transp.Conn,
+		LocalAddr:  transp.LocalAddr,
+		RemoteAddr: dest_addr,
 	}
 
 	request.AddVia(&via.SIPVia{
 		Proto:  "UDP",
-		Domain: DestTransport.LocalAddr.IP.String(),
-		Port:   DestTransport.LocalAddr.Port,
+		Domain: dest_transp.LocalAddr.IP.String(),
+		Port:   dest_transp.LocalAddr.Port,
 		Branch: randSeq(5),
 	})
-	request.Transport = &DestTransport
 
-	_ = StartClientTransaction(request, ctrans_cb, trpt_cb)
+	StartClientTransaction(request, dest_transp, ctrans_cb, trpt_cb, term_cb)
 
 	for {
-		select {
-		case ev := <-ctrans_chan:
-			if ev.Type == util.MESSAGE {
-				response, ok := ev.Data.(*message.SIPMessage)
-				if !ok {
-					continue
-				}
+		response := <-ctrans_chan
 
-				log.Debug().Msg("Forward response to server transaction")
-				response.RemoveVia()
-				server_trans.Event(util.Event{Type: util.MESSAGE, Data: response})
+		log.Debug().Msg("Forward response to server transaction")
 
-				status := response.Response.StatusCode
-				if status >= 200 {
-					return
-				}
-			} else if ev.Type == util.ERROR {
-				return
-			}
-		case ev := <-strans_chan:
-			if ev.Type == util.ERROR {
-				return
-			}
+		if len(response.Headers["via"]) == 0 {
+			log.Error().Str("transaction_id", "ehh").Interface("handle_message", response).Msg("No via header in response")
+		}
+
+		response.RemoveVia()
+		server_trans.Event(response)
+
+		status := response.Response.StatusCode
+		if status >= 200 {
+			return
 		}
 	}
 }
 
-func Stateless_route(request *message.SIPMessage) {
+func Stateless_route(request *message.SIPMessage, transp *transport.Transport) {
 	if request.Request == nil {
 		return
 	}
@@ -113,41 +107,20 @@ func Stateless_route(request *message.SIPMessage) {
 	}
 	DestTransport := transport.Transport{
 		Protocol:   "UDP",
-		Conn:       request.Transport.Conn,
-		LocalAddr:  request.Transport.LocalAddr,
+		Conn:       transp.Conn,
+		LocalAddr:  transp.LocalAddr,
 		RemoteAddr: DestAddr,
 	}
 
 	bin := message.Serialize(request)
 	if bin == nil {
-		//serialize error
+		log.Error().Msg("Serialize error")
 		return
 	}
 
 	_, err = DestTransport.Conn.WriteToUDP(bin, DestTransport.RemoteAddr)
 	if err != nil {
 		log.Error().Msg("Transport error")
-	}
-}
-
-func trpt_cb(from transaction.Transaction, ev util.Event) {
-	msg, ok := ev.Data.(*message.SIPMessage)
-	if !ok {
-		return
-	}
-
-	trprt := msg.Transport
-	bin := message.Serialize(msg)
-	if bin == nil {
-		//serialize error
-		return
-	}
-
-	_, err := trprt.Conn.WriteToUDP(bin, trprt.RemoteAddr)
-	if err != nil {
-		//error transport error
-		log.Error().Msg("Transport error")
-		from.Event(util.Event{Type: util.ERROR, Data: msg})
 	}
 }
 

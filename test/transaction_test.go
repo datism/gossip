@@ -2,7 +2,6 @@ package test
 
 import (
 	"gossip/message"
-	// "gossip/message/cseq"
 	"gossip/message/cseq"
 	"gossip/message/via"
 	"gossip/transaction"
@@ -23,14 +22,14 @@ func TestMakeClientTransactionIDFromRequest(t *testing.T) {
 		},
 	}
 
-	expected := &transaction.TransID{
+	expected := transaction.TransID{
 		BranchID: "123",
 		Method:   "INVITE",
 		SentBy:   "",
 	}
 
-	tid := transaction.MakeClientTransactionID(data)
-	if tid == nil {
+	tid, err := transaction.MakeClientTransactionID(data)
+	if err != nil {
 		t.Fatalf("Error make transaction ID")
 	}
 
@@ -49,14 +48,14 @@ func TestMakeClientTransactionIDFromResponse(t *testing.T) {
 		},
 	}
 
-	expected := &transaction.TransID{
+	expected := transaction.TransID{
 		BranchID: "123",
 		Method:   "INVITE",
 		SentBy:   "",
 	}
 
-	tid := transaction.MakeClientTransactionID(data)
-	if tid == nil {
+	tid, err := transaction.MakeClientTransactionID(data)
+	if err != nil {
 		t.Fatalf("Error make transaction ID")
 	}
 
@@ -78,14 +77,14 @@ func TestMakeServerTransactionIDFromRequest(t *testing.T) {
 		},
 	}
 
-	expected := &transaction.TransID{
+	expected := transaction.TransID{
 		BranchID: "123",
 		Method:   "INVITE",
 		SentBy:   "server10.biloxi.com",
 	}
 
-	tid := transaction.MakeServerTransactionID(data)
-	if tid == nil {
+	tid, err := transaction.MakeServerTransactionID(data)
+	if err != nil {
 		t.Fatalf("Error make transaction ID")
 	}
 

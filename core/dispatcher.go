@@ -7,7 +7,7 @@ import (
 	"gossip/transaction/istrans"
 	"gossip/transaction/nictrans"
 	"gossip/transaction/nistrans"
-	"gossip/util"
+	"gossip/transport"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -18,12 +18,12 @@ var (
 	m  = make(map[transaction.TransID]transaction.Transaction)
 )
 
-func HandleMessage(msg *message.SIPMessage) {
-	log.Trace().Str("event", "handle_sip_message").Interface("sip_message", msg).Msg("Handle message")
+func HandleMessage(msg *message.SIPMessage, transport *transport.Transport) {
+	log.Trace().Interface("message", msg).Msg("Handle message")
 
 	mu.Lock()
 	if trans := FindTransaction(msg); trans != nil {
-		trans.Event(util.Event{Type: util.MESSAGE, Data: msg})
+		trans.Event(msg)
 		mu.Unlock()
 	} else {
 		mu.Unlock()
@@ -34,21 +34,23 @@ func HandleMessage(msg *message.SIPMessage) {
 
 		if msg.Request.Method == "ACK" {
 			log.Debug().Msg("Cannot start new transaction with ack request...process stateless")
-			Stateless_route(msg)
+			Stateless_route(msg, transport)
 			return
 		}
 
-		Statefull_route(msg)
+		Statefull_route(msg, transport)
 	}
 }
 
 func StartServerTransaction(
 	msg *message.SIPMessage,
-	core_cb func(transaction.Transaction, util.Event),
-	tranport_cb func(transaction.Transaction, util.Event),
+	transport *transport.Transport,
+	core_cb func(*transport.Transport, *message.SIPMessage),
+	tranport_cb func(*transport.Transport, *message.SIPMessage) bool,
+	term_cb func(transaction.TransID, transaction.TERM_REASON),
 ) transaction.Transaction {
-	tid := transaction.MakeServerTransactionID(msg)
-	if tid == nil {
+	tid, err := transaction.MakeServerTransactionID(msg)
+	if err != nil {
 		log.Error().Msg("Cannot create transaction ID")
 		return nil
 	}
@@ -56,15 +58,15 @@ func StartServerTransaction(
 	var trans transaction.Transaction
 
 	if msg.Request.Method == "INVITE" {
-		trans = istrans.Make(*tid, msg, tranport_cb, core_cb)
+		trans = istrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	} else {
-		trans = nistrans.Make(*tid, msg, tranport_cb, core_cb)
+		trans = nistrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	}
 
 	log.Debug().Msg("Start server transaction with trans id: " + tid.String())
 
 	mu.Lock()
-	m[*tid] = trans
+	m[tid] = trans
 	mu.Unlock()
 	go trans.Start()
 	return trans
@@ -72,12 +74,14 @@ func StartServerTransaction(
 
 func StartClientTransaction(
 	msg *message.SIPMessage,
-	core_cb func(transaction.Transaction, util.Event),
-	tranport_cb func(transaction.Transaction, util.Event),
+	transport *transport.Transport,
+	core_cb func(*transport.Transport, *message.SIPMessage),
+	tranport_cb func(*transport.Transport, *message.SIPMessage) bool,
+	term_cb func(transaction.TransID, transaction.TERM_REASON),
 ) transaction.Transaction {
 
-	tid := transaction.MakeClientTransactionID(msg)
-	if tid == nil {
+	tid, err := transaction.MakeClientTransactionID(msg)
+	if err != nil {
 		log.Error().Msg("Cannot create transaction ID")
 		return nil
 	}
@@ -85,15 +89,15 @@ func StartClientTransaction(
 	var trans transaction.Transaction
 
 	if msg.CSeq.Method == "INVITE" {
-		trans = ictrans.Make(*tid, msg, tranport_cb, core_cb)
+		trans = ictrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	} else {
-		trans = nictrans.Make(*tid, msg, tranport_cb, core_cb)
+		trans = nictrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	}
 
 	log.Debug().Msg("Start client transaction with trans id: " + tid.String())
 
 	mu.Lock()
-	m[*tid] = trans
+	m[tid] = trans
 	mu.Unlock()
 	go trans.Start()
 	return trans
@@ -107,19 +111,20 @@ func DeleteTransaction(tid transaction.TransID) {
 }
 
 func FindTransaction(msg *message.SIPMessage) transaction.Transaction {
-	var tid *transaction.TransID
+	var tid transaction.TransID
+	var err error
 	if msg.Request != nil {
-		tid = transaction.MakeServerTransactionID(msg)
+		tid, err = transaction.MakeServerTransactionID(msg)
 	} else {
-		tid = transaction.MakeClientTransactionID(msg)
+		tid, err = transaction.MakeClientTransactionID(msg)
 	}
 
-	if tid == nil {
+	if err != nil {
 		log.Error().Msg("Cannot create transaction ID")
 		return nil
 	}
 
-	if result, ok := m[*tid]; ok {
+	if result, ok := m[tid]; ok {
 		log.Debug().Msg("Found transaction with ID: " + tid.String())
 		return result
 	}

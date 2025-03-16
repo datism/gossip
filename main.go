@@ -4,7 +4,6 @@ import (
 	"flag"
 	"net"
 	"os"
-	"time"
 
 	"gossip/core"
 	"gossip/message"
@@ -26,19 +25,19 @@ func main() {
 	// }
 	// defer logFile.Close()
 
-	zerolog.SetGlobalLevel(zerolog.TraceLevel)
+	zerolog.SetGlobalLevel(zerolog.NoLevel)
 
-	// Rotate log file by size using lumberjack
-	log.Logger = log.Output(zerolog.MultiLevelWriter(
-		zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339},
-		// &lumberjack.Logger{
-		// 	Filename:   "gossip.log",
-		// 	MaxSize:    10,   // Max size in MB
-		// 	MaxBackups: 3,    // Max number of old log files to keep
-		// 	MaxAge:     28,   // Max number of days to keep old log files
-		// 	Compress:   true, // Compress old log files
-		// },
-	))
+	// // Rotate log file by size using lumberjack
+	// log.Logger = log.Output(zerolog.MultiLevelWriter(
+	// 	zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339},
+	// 	&lumberjack.Logger{
+	// 		Filename:   "gossip.log",
+	// 		MaxSize:    10,    // Max size in MB
+	// 		MaxBackups: 3,     // Max number of old log files to keep
+	// 		MaxAge:     28,    // Max number of days to keep old log files
+	// 		Compress:   false, // Compress old log files
+	// 	},
+	// ))
 
 	// Create UDP address
 	udpAddr, err := net.ResolveUDPAddr("udp", *addr)
@@ -101,6 +100,5 @@ func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
 		LocalAddr:  udpAddr,
 		RemoteAddr: clientAddr,
 	}
-	msg.Transport = transport
-	core.HandleMessage(msg)
+	core.HandleMessage(msg, transport)
 }

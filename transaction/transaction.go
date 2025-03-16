@@ -3,7 +3,6 @@ package transaction
 import (
 	"fmt"
 	"gossip/message"
-	"gossip/util"
 )
 
 type TransType int
@@ -13,6 +12,27 @@ const (
 	NON_INVITE_CLIENT
 	INVITE_SERVER
 	NON_INVITE_SERVER
+)
+
+type TERM_REASON int
+
+func (t TERM_REASON) String() string {
+	switch t {
+	case NORMAL:
+		return "NORMAL"
+	case TIMEOUT:
+		return "TIMEOUT"
+	case ERROR:
+		return "ERROR"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+const (
+	NORMAL = iota
+	TIMEOUT
+	ERROR
 )
 
 type TransID struct {
@@ -27,7 +47,7 @@ func (tid TransID) String() string {
 }
 
 type Transaction interface {
-	Event(event util.Event)
+	Event(*message.SIPMessage)
 	Start()
 }
 
@@ -57,27 +77,27 @@ type Transaction interface {
 				transaction, except for ACK, where the method of the request
 				that created the transaction is INVITE.
 */
-func MakeServerTransactionID(msg *message.SIPMessage) *TransID {
+func MakeServerTransactionID(msg *message.SIPMessage) (TransID, error) {
 	topmostVia := msg.TopmostVia
 	branch := topmostVia.Branch
 
 	if msg.Request == nil {
-		return nil
-	} else {
-		method := msg.Request.Method
-		if method == "ACK" {
-			method = "INVITE"
-		}
-
-		return &TransID{
-			BranchID: branch,
-			Method:   msg.Request.Method,
-			SentBy:   topmostVia.Domain,
-		}
+		return TransID{}, fmt.Errorf("request is nil")
 	}
+
+	method := msg.Request.Method
+	if method == "ACK" {
+		method = "INVITE"
+	}
+
+	return TransID{
+		BranchID: branch,
+		Method:   method,
+		SentBy:   topmostVia.Domain,
+	}, nil
 }
 
-func MakeClientTransactionID(msg *message.SIPMessage) *TransID {
+func MakeClientTransactionID(msg *message.SIPMessage) (TransID, error) {
 	topmostVia := msg.TopmostVia
 	branch := topmostVia.Branch
 
@@ -88,8 +108,8 @@ func MakeClientTransactionID(msg *message.SIPMessage) *TransID {
 		method = msg.CSeq.Method
 	}
 
-	return &TransID{
+	return TransID{
 		BranchID: branch,
 		Method:   method,
-	}
+	}, nil
 }

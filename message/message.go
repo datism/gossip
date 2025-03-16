@@ -13,7 +13,6 @@ import (
 	"gossip/message/fromto"
 	"gossip/message/uri"
 	"gossip/message/via"
-	"gossip/transport"
 )
 
 type Startline struct {
@@ -44,7 +43,6 @@ type SIPMessage struct {
 	TopmostVia *via.SIPVia
 	Headers    map[string][]string
 	Body       []byte
-	Transport  *transport.Transport
 }
 
 func Parse(data []byte) (*SIPMessage, error) {
@@ -202,12 +200,11 @@ func Serialize(msg *SIPMessage) []byte {
 		builder.WriteString(fmt.Sprintf("Via: %s\r\n", via.Serialize(msg.TopmostVia)))
 	}
 
-	if vias := msg.GetHeader("via"); vias != nil {
-		for _, via := range vias {
-			builder.WriteString(fmt.Sprintf("%s: %s\r\n", "via", via))
-		}
-		msg.DeleteHeader("via")
-	}
+	// if vias := msg.GetHeader("via"); vias != nil {
+	// 	for _, via := range vias {
+	// 		builder.WriteString(fmt.Sprintf("%s: %s\r\n", "via", via))
+	// 	}
+	// }
 
 	// Serialize other headers
 	for name, values := range msg.Headers {
@@ -226,101 +223,6 @@ func Serialize(msg *SIPMessage) []byte {
 
 	// Convert the builder content to a byte slice and return
 	return []byte(builder.String())
-}
-
-func (msg SIPMessage) DeepCopy() *SIPMessage {
-	// Deep copy the From field
-	var newFrom *fromto.SIPFromTo
-	if msg.From != nil {
-		newFrom = msg.From.DeepCopy()
-	}
-
-	// Deep copy the To field
-	var newTo *fromto.SIPFromTo
-	if msg.To != nil {
-		newTo = msg.To.DeepCopy()
-	}
-
-	// Deep copy the CSeq field
-	var newCSeq *cseq.SIPCseq
-	if msg.CSeq != nil {
-		newCSeq = msg.CSeq.DeepCopy()
-	}
-
-	// Deep copy the Contacts slice
-	var newContacts []*contact.SIPContact
-	if msg.Contacts != nil {
-		newContacts = make([]*contact.SIPContact, len(msg.Contacts))
-		for i, contact := range msg.Contacts {
-			if contact != nil {
-				newContacts[i] = contact.DeepCopy()
-			}
-		}
-	}
-
-	// Deep copy the TopmostVia field
-	var newTopmostVia *via.SIPVia
-	if msg.TopmostVia != nil {
-		newTopmostVia = msg.TopmostVia.DeepCopy()
-	}
-
-	// Deep copy the Headers map
-	var newHeaders map[string][]string
-	if msg.Headers != nil {
-		newHeaders = make(map[string][]string)
-		for key, values := range msg.Headers {
-			newValues := make([]string, len(values))
-			copy(newValues, values)
-			newHeaders[key] = newValues
-		}
-	}
-
-	// Deep copy the Body slice
-	var newBody []byte
-	if msg.Body != nil {
-		newBody = make([]byte, len(msg.Body))
-		copy(newBody, msg.Body)
-	}
-
-	// Deep copy the Transport field
-	var newTransport *transport.Transport
-	if msg.Transport != nil {
-		newTransport = msg.Transport.DeepCopy()
-	}
-
-	// Deep copy the Startline
-	var newStartline Startline
-	if msg.Request != nil {
-		var newRequestURI *uri.SIPUri
-		if msg.Request.RequestURI != nil {
-			newRequestURI = msg.Request.RequestURI.DeepCopy()
-		}
-
-		newStartline.Request = &Request{
-			Method:     msg.Request.Method,
-			RequestURI: newRequestURI,
-		}
-	}
-	if msg.Response != nil {
-		newStartline.Response = &Response{
-			StatusCode:   msg.Response.StatusCode,
-			ReasonPhrase: msg.Response.ReasonPhrase,
-		}
-	}
-
-	// Return the new deep copied SIPMessage
-	return &SIPMessage{
-		Startline:  newStartline,
-		From:       newFrom,
-		To:         newTo,
-		CSeq:       newCSeq,
-		CallID:     msg.CallID,
-		Contacts:   newContacts,
-		TopmostVia: newTopmostVia,
-		Headers:    newHeaders,
-		Body:       newBody,
-		Transport:  newTransport,
-	}
 }
 
 // GetHeader returns the values of a specific header
@@ -436,59 +338,5 @@ func MakeGenericResponse(status_code int, reason string, request *SIPMessage) *S
 		TopmostVia: request.TopmostVia,
 		CSeq:       request.CSeq,
 		Headers:    res_hdr,
-		Transport:  request.Transport,
-	}
-}
-
-func MakeGenericAck(inv *SIPMessage, res *SIPMessage) *SIPMessage {
-	/* RFC 3261 17.1.1.3
-		The ACK request constructed by the client transaction MUST contain
-	 	values for the Call-ID, From, and Request-URI that are equal to the
-	  	values of those header fields in the request passed to the transport
-	  	by the client transaction (call this the "original request").
-
-	   	The To header field in the ACK MUST equal the To header field in the
-	  	response being acknowledged, and therefore will usually differ from
-	  	the To header field in the original request by the addition of the
-	  	tag parameter.
-
-	   	The ACK MUST contain a single Via header field, and
-	 	this MUST be equal to the top Via header field of the original
-	  	request.
-
-	   	The CSeq header field in the ACK MUST contain the same
-	  	value for the sequence number as was present in the original request,
-	  	but the method parameter MUST be equal to "ACK".
-
-	   	If the INVITE request whose response is being acknowledged had Route
-	 	header fields, those header fields MUST appear in the ACK.  This is
-	  	to ensure that the ACK can be routed properly through any downstream
-	  	stateless proxies.
-	*/
-	ack_hdr := make(map[string][]string)
-	if sessionid := inv.GetHeader("session-id"); sessionid != nil {
-		ack_hdr["session-id"] = sessionid
-	}
-	if routes := inv.GetHeader("route"); routes != nil {
-		ack_hdr["route"] = routes
-	}
-
-	return &SIPMessage{
-		Startline: Startline{
-			Request: &Request{
-				Method:     "ACK",
-				RequestURI: inv.Request.RequestURI,
-			},
-		},
-		From:       inv.From,
-		CallID:     inv.CallID,
-		To:         res.To,
-		TopmostVia: inv.TopmostVia,
-		CSeq: &cseq.SIPCseq{
-			Method: "ACK",
-			Seq:    inv.CSeq.Seq,
-		},
-		Headers:   ack_hdr,
-		Transport: inv.Transport,
 	}
 }
