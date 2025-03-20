@@ -23,7 +23,7 @@ type Startline struct {
 // RequestType represents a SIP request
 type Request struct {
 	Method     string
-	RequestURI *uri.SIPUri
+	RequestURI uri.SIPUri
 }
 
 // ResponseType represents a SIP response
@@ -35,12 +35,12 @@ type Response struct {
 // SIPMessage represents a SIP message
 type SIPMessage struct {
 	Startline
-	From       *fromto.SIPFromTo
-	To         *fromto.SIPFromTo
-	CSeq       *cseq.SIPCseq
+	From       fromto.SIPFromTo
+	To         fromto.SIPFromTo
+	CSeq       cseq.SIPCseq
 	CallID     string
-	Contacts   []*contact.SIPContact
-	TopmostVia *via.SIPVia
+	Contacts   []contact.SIPContact
+	TopmostVia via.SIPVia
 	Headers    map[string][]string
 	Body       []byte
 }
@@ -75,9 +75,15 @@ func Parse(data []byte) (*SIPMessage, error) {
 		if _, err := fmt.Sscanf(startLine, "%s %s SIP/%s", &method, &requestURI, &version); err != nil {
 			return nil, err
 		}
+
+		request_uri, err := uri.Parse(requestURI)
+		if err != nil {
+			return nil, err
+		}
+
 		msg.Startline.Request = &Request{
 			Method:     method,
-			RequestURI: uri.Parse(requestURI),
+			RequestURI: request_uri,
 		}
 	}
 
@@ -101,29 +107,25 @@ func Parse(data []byte) (*SIPMessage, error) {
 		key := strings.ToLower(strings.TrimSpace(parts[0]))
 		values := strings.Split(parts[1], ",")
 		for _, value := range values {
-			// if key == "from" {
-			// 	msg.From = ParseFromTo(value)
-			// } else if key == "to" {
-			// 	msg.To = ParseFromTo(value)
-			// } else if key == "call-id" {
-			// 	msg.CallID = value
-			// } else if key == "cseq" {
-			// 	msg.CSeq = ParseCseq(value)
-			// } else if key == "contact" {
-			// 	msg.Contacts = append(msg.Contacts, ParseContact(value))
-			// } else {
 			msg.Headers[key] = append(msg.Headers[key], strings.TrimSpace(value))
-			// }
 		}
 	}
 
-	if from := msg.GetHeader("from"); from != nil {
-		msg.From = fromto.Parse(from[0])
+	if from_raw := msg.GetHeader("from"); from_raw != nil {
+		from, err := fromto.Parse(from_raw[0])
+		if err != nil {
+			return nil, err
+		}
+		msg.From = from
 		msg.DeleteHeader("from")
 	}
 
-	if to := msg.GetHeader("to"); to != nil {
-		msg.To = fromto.Parse(to[0])
+	if to_raw := msg.GetHeader("to"); to_raw != nil {
+		to, err := fromto.Parse(to_raw[0])
+		if err != nil {
+			return nil, err
+		}
+		msg.To = to
 		msg.DeleteHeader("to")
 	}
 
@@ -132,20 +134,32 @@ func Parse(data []byte) (*SIPMessage, error) {
 		msg.DeleteHeader("call-id")
 	}
 
-	if cseq_hdr := msg.GetHeader("cseq"); cseq_hdr != nil {
-		msg.CSeq = cseq.Parse(cseq_hdr[0])
+	if cseq_raw := msg.GetHeader("cseq"); cseq_raw != nil {
+		cseq, err := cseq.Parse(cseq_raw[0])
+		if err != nil {
+			return nil, err
+		}
+		msg.CSeq = cseq
 		msg.DeleteHeader("cseq")
 	}
 
-	if contacts := msg.GetHeader("contact"); contacts != nil {
-		msg.Contacts = make([]*contact.SIPContact, 0)
-		for _, cont := range contacts {
-			msg.Contacts = append(msg.Contacts, contact.Parse(cont))
+	if contacts_raw := msg.GetHeader("contact"); contacts_raw != nil {
+		msg.Contacts = make([]contact.SIPContact, 0)
+
+		for _, contact_raw := range contacts_raw {
+			cont, err := contact.Parse(contact_raw)
+			if err == nil {
+				msg.Contacts = append(msg.Contacts, cont)
+			}
 		}
 		msg.DeleteHeader("contact")
 	}
 
-	msg.TopmostVia = via.Parse(msg.Headers["via"][0])
+	top_most_via, err := via.Parse(msg.GetHeader("via")[0])
+	if err != nil {
+		return nil, err
+	}
+	msg.TopmostVia = top_most_via
 	msg.Headers["via"] = msg.Headers["via"][1:]
 
 	// Read body
@@ -158,12 +172,12 @@ func Parse(data []byte) (*SIPMessage, error) {
 	return &msg, nil
 }
 
-func Serialize(msg *SIPMessage) []byte {
+func (msg SIPMessage) Serialize() []byte {
 	var builder strings.Builder
 
 	// Serialize the start line
 	if msg.Request != nil {
-		builder.WriteString(fmt.Sprintf("%s %s SIP/%s", msg.Request.Method, uri.Serialize(msg.Request.RequestURI), "2.0"))
+		builder.WriteString(fmt.Sprintf("%s %s SIP/%s", msg.Request.Method, msg.Request.RequestURI.Serialize(), "2.0"))
 	} else if msg.Response != nil {
 		builder.WriteString(fmt.Sprintf("SIP/%s %d %s", "2.0", msg.Response.StatusCode, msg.Response.ReasonPhrase))
 	} else {
@@ -171,19 +185,13 @@ func Serialize(msg *SIPMessage) []byte {
 	}
 
 	// Serialize the From header
-	if msg.From != nil {
-		builder.WriteString(fmt.Sprintf("\r\nFrom: %s\r\n", fromto.Serialize(msg.From)))
-	}
+	builder.WriteString(fmt.Sprintf("\r\nFrom: %s\r\n", msg.From.Serialize()))
 
 	// Serialize the To header
-	if msg.To != nil {
-		builder.WriteString(fmt.Sprintf("To: %s\r\n", fromto.Serialize(msg.To)))
-	}
+	builder.WriteString(fmt.Sprintf("To: %s\r\n", msg.To.Serialize()))
 
 	// Serialize the CSeq header
-	if msg.CSeq != nil {
-		builder.WriteString(fmt.Sprintf("CSeq: %s\r\n", cseq.Serialize(msg.CSeq)))
-	}
+	builder.WriteString(fmt.Sprintf("CSeq: %s\r\n", msg.CSeq.Serialize()))
 
 	// Serialize the Call-ID header
 	if msg.CallID != "" {
@@ -191,20 +199,14 @@ func Serialize(msg *SIPMessage) []byte {
 	}
 
 	// Serialize the Contact headers
-	for _, contc := range msg.Contacts {
-		builder.WriteString(fmt.Sprintf("Contact: %s\r\n", contact.Serialize(contc)))
+	if msg.Contacts != nil {
+		for _, contc := range msg.Contacts {
+			builder.WriteString(fmt.Sprintf("Contact: %s\r\n", contc.Serialize()))
+		}
 	}
 
 	// Serialize the topmost Via header
-	if msg.TopmostVia != nil {
-		builder.WriteString(fmt.Sprintf("Via: %s\r\n", via.Serialize(msg.TopmostVia)))
-	}
-
-	// if vias := msg.GetHeader("via"); vias != nil {
-	// 	for _, via := range vias {
-	// 		builder.WriteString(fmt.Sprintf("%s: %s\r\n", "via", via))
-	// 	}
-	// }
+	builder.WriteString(fmt.Sprintf("Via: %s\r\n", msg.TopmostVia.Serialize()))
 
 	// Serialize other headers
 	for name, values := range msg.Headers {
@@ -235,13 +237,17 @@ func (msg SIPMessage) GetHeader(header string) []string {
 	}
 }
 
-func (msg *SIPMessage) AddVia(v *via.SIPVia) {
-	msg.Headers["via"] = append(msg.Headers["via"], via.Serialize(msg.TopmostVia))
+func (msg *SIPMessage) AddVia(v via.SIPVia) {
+	msg.Headers["via"] = append(msg.Headers["via"], msg.TopmostVia.Serialize())
 	msg.TopmostVia = v
 }
 
 func (msg *SIPMessage) RemoveVia() {
-	msg.TopmostVia = via.Parse(msg.Headers["via"][0])
+	top_most_via, err := via.Parse(msg.Headers["via"][0])
+	if err != nil {
+		return
+	}
+	msg.TopmostVia = top_most_via
 	msg.Headers["via"] = msg.Headers["via"][1:]
 }
 

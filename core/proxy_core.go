@@ -12,7 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func GetMapSize () int {
+func GetMapSize() int {
 	mu.Lock()
 	defer mu.Unlock()
 	return len(m)
@@ -31,7 +31,7 @@ func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 	}
 
 	trpt_cb := func(transport *transport.Transport, msg *message.SIPMessage) bool {
-		bin := message.Serialize(msg)
+		bin := msg.Serialize()
 		if bin == nil {
 			//serialize error
 			return false
@@ -83,7 +83,7 @@ func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 		RemoteAddr: dest_addr,
 	}
 
-	request.AddVia(&via.SIPVia{
+	request.AddVia(via.SIPVia{
 		Proto:  "UDP",
 		Domain: dest_transp.LocalAddr.IP.String(),
 		Port:   dest_transp.LocalAddr.Port,
@@ -103,16 +103,16 @@ func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 				log.Error().Msg("Error in client transaction")
 				return
 			}
-	
+
 			log.Debug().Msg("Forward response to server transaction")
-	
+
 			if len(response.Headers["via"]) == 0 {
 				log.Error().Str("transaction_id", "ehh").Interface("handle_message", response).Msg("No via header in response")
 			}
-	
+
 			response.RemoveVia()
 			server_trans.Event(response)
-	
+
 			status := response.Response.StatusCode
 			if status >= 200 {
 				return
@@ -139,7 +139,7 @@ func Stateless_route(request *message.SIPMessage, transp *transport.Transport) {
 		RemoteAddr: DestAddr,
 	}
 
-	bin := message.Serialize(request)
+	bin := request.Serialize()
 	if bin == nil {
 		log.Error().Msg("Serialize error")
 		return

@@ -1,52 +1,34 @@
 package fromto
 
 import (
+	"errors"
 	"gossip/message/uri"
 	"strings"
 )
 
 type SIPFromTo struct {
-	Uri   *uri.SIPUri
+	Uri   uri.SIPUri
 	Tag   string
 	Paras map[string]string
 }
 
-func (ft SIPFromTo) DeepCopy() *SIPFromTo {
-	// Deep copy the Uri field
-	var newUri *uri.SIPUri
-	if ft.Uri != nil {
-		newUri = ft.Uri.DeepCopy() // Use SIPUri's DeepCopy method
-	}
-
-	// Deep copy the Paras map
-	var newParas map[string]string
-	if ft.Paras != nil {
-		newParas = make(map[string]string)
-		for key, value := range ft.Paras {
-			newParas[key] = value
-		}
-	}
-
-	// Return the deep copied SIPFromTo
-	return &SIPFromTo{
-		Uri:   newUri,
-		Tag:   ft.Tag,
-		Paras: newParas,
-	}
-}
-
-func Parse(fromto string) *SIPFromTo {
+func Parse(fromto string) (SIPFromTo, error) {
 	var sip_fromto SIPFromTo
-
-	sip_fromto.Paras = make(map[string]string)
 
 	ag_begin := strings.Index(fromto, "<")
 	ag_close := strings.Index(fromto, ">")
 
 	if ag_begin != -1 && ag_begin < ag_close {
-		sip_fromto.Uri = uri.Parse(fromto[ag_begin+1 : ag_close])
+		fromto_uri, err := uri.Parse(fromto[ag_begin+1 : ag_close])
+
+		if err != nil {
+			return sip_fromto, err
+		} else {
+			sip_fromto.Uri = fromto_uri
+		}
+
 	} else {
-		return nil
+		return sip_fromto, errors.New("invalid From-To header")
 	}
 
 	paras := fromto[ag_close+1:]
@@ -57,24 +39,26 @@ func Parse(fromto string) *SIPFromTo {
 				if kv[0] == "tag" {
 					sip_fromto.Tag = kv[1]
 				} else {
+					if sip_fromto.Paras == nil {
+						sip_fromto.Paras = make(map[string]string)
+					}
+
 					sip_fromto.Paras[kv[0]] = kv[1]
 				}
 			}
 		}
 	}
 
-	return &sip_fromto
+	return sip_fromto, nil
 }
 
-func Serialize(fromTo *SIPFromTo) string {
+func (fromTo SIPFromTo) Serialize() string {
 	var result strings.Builder
 
 	// Add URI
-	if fromTo.Uri != nil {
-		result.WriteString("<")
-		result.WriteString(uri.Serialize(fromTo.Uri))
-		result.WriteString(">")
-	}
+	result.WriteString("<")
+	result.WriteString(fromTo.Uri.Serialize())
+	result.WriteString(">")
 
 	// Add tag if present
 	if fromTo.Tag != "" {
@@ -83,11 +67,13 @@ func Serialize(fromTo *SIPFromTo) string {
 	}
 
 	// Add other parameters
-	for k, v := range fromTo.Paras {
-		result.WriteString(";")
-		result.WriteString(k)
-		result.WriteString("=")
-		result.WriteString(v)
+	if fromTo.Paras != nil {
+		for k, v := range fromTo.Paras {
+			result.WriteString(";")
+			result.WriteString(k)
+			result.WriteString("=")
+			result.WriteString(v)
+		}
 	}
 
 	return result.String()

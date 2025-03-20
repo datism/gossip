@@ -16,8 +16,8 @@ services:
 
     # mem_limit: 4G
     # network_mode: "host"
-    # environment:
-      # - GOMAXPROCS=4 # Go does not match this by default
+    environment:
+      - GOMAXPROCS=4 # Go does not match this by default
       # - GODEBUG=madvdontneed=0
       # - GODEBUG=madvdontneed=1,gctrace=1
       # - GOGC=70

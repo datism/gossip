@@ -9,56 +9,21 @@ import (
 
 type SIPContact struct {
 	DisName   string
-	Uri       *uri.SIPUri
+	Uri       uri.SIPUri
 	Qvalue    float32
 	Expire    int
 	Paras     map[string]string
 	Supported []string
 }
 
-func (contact *SIPContact) DeepCopy() *SIPContact {
-	// Deep copy the Uri field
-	var newUri *uri.SIPUri
-	if contact.Uri != nil {
-		newUri = contact.Uri.DeepCopy() // Use SIPUri's DeepCopy method
-	}
-
-	// Deep copy the Paras map
-	var newParas map[string]string
-	if contact.Paras != nil {
-		newParas = make(map[string]string)
-		for key, value := range contact.Paras {
-			newParas[key] = value
-		}
-	}
-
-	// Deep copy the Supported slice
-	var newSupported []string
-	if contact.Supported != nil {
-		newSupported = make([]string, len(contact.Supported))
-		copy(newSupported, contact.Supported)
-	}
-
-	// Return the deep copied SIPContact
-	return &SIPContact{
-		DisName:   contact.DisName,
-		Uri:       newUri,
-		Qvalue:    contact.Qvalue,
-		Expire:    contact.Expire,
-		Paras:     newParas,
-		Supported: newSupported,
-	}
-}
-
-func Parse(contact string) *SIPContact {
+func Parse(contact string) (SIPContact, error) {
 	var sip_contact SIPContact
-
-	sip_contact.Paras = make(map[string]string)
-	sip_contact.Supported = make([]string, 0)
+	sip_contact.Qvalue = -1
+	sip_contact.Expire = -1
 
 	if contact == "*" {
 		sip_contact.DisName = "*"
-		return &sip_contact
+		return sip_contact, nil
 	}
 
 	var dsip_name string
@@ -90,10 +55,16 @@ func Parse(contact string) *SIPContact {
 	}
 
 	sip_contact.DisName = dsip_name
-	sip_contact.Uri = uri.Parse(addr_spec)
+
+	contact_uri, err := uri.Parse(addr_spec)
+	if err != nil {
+		return sip_contact, err
+	}
+	sip_contact.Uri = contact_uri
+
 	parseParams(params, &sip_contact)
 
-	return &sip_contact
+	return sip_contact, nil
 }
 
 func parseParams(params string, contact *SIPContact) {
@@ -113,15 +84,22 @@ func parseParams(params string, contact *SIPContact) {
 					contact.Expire = expires
 				}
 			} else {
+				if contact.Paras == nil {
+					contact.Paras = make(map[string]string)
+				}
+
 				contact.Paras[kv[0]] = kv[1]
 			}
 		} else if len(kv) == 1 {
+			if contact.Supported == nil {
+				contact.Supported = make([]string, 0)
+			}
 			contact.Supported = append(contact.Supported, kv[0])
 		}
 	}
 }
 
-func Serialize(contact *SIPContact) string {
+func (contact SIPContact) Serialize() string {
 	var builder strings.Builder
 
 	// Add Display Name if exists
@@ -130,9 +108,7 @@ func Serialize(contact *SIPContact) string {
 	}
 
 	// Add URI if exists
-	if contact.Uri != nil {
-		builder.WriteString(fmt.Sprintf("<%s>", uri.Serialize((contact.Uri))))
-	}
+	builder.WriteString(fmt.Sprintf("<%s>", contact.Uri.Serialize()))
 
 	// Add Parameters
 	if contact.Qvalue > 0 {
@@ -141,11 +117,15 @@ func Serialize(contact *SIPContact) string {
 	if contact.Expire > 0 {
 		builder.WriteString(fmt.Sprintf(";expires=%d", contact.Expire))
 	}
-	for k, v := range contact.Paras {
-		builder.WriteString(fmt.Sprintf(";%s=%s", k, v))
+	if contact.Paras != nil {
+		for k, v := range contact.Paras {
+			builder.WriteString(fmt.Sprintf(";%s=%s", k, v))
+		}
 	}
-	for _, v := range contact.Supported {
-		builder.WriteString(fmt.Sprintf(";%s", v))
+	if contact.Supported != nil {
+		for _, v := range contact.Supported {
+			builder.WriteString(fmt.Sprintf(";%s", v))
+		}
 	}
 
 	return builder.String()

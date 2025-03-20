@@ -287,7 +287,7 @@ func initAck(inv *message.SIPMessage) *message.SIPMessage {
 		From:       inv.From,
 		CallID:     inv.CallID,
 		TopmostVia: inv.TopmostVia,
-		CSeq: &cseq.SIPCseq{
+		CSeq: cseq.SIPCseq{
 			Method: "ACK",
 			Seq:    inv.CSeq.Seq,
 		},

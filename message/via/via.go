@@ -1,6 +1,7 @@
 package via
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 )
@@ -13,30 +14,8 @@ type SIPVia struct {
 	Opts   map[string]string
 }
 
-func (via SIPVia) DeepCopy() *SIPVia {
-	// Deep copy the Opts map
-	var newOpts map[string]string
-	if via.Opts != nil {
-		newOpts = make(map[string]string)
-		for key, value := range via.Opts {
-			newOpts[key] = value
-		}
-	}
-
-	// Return the deep copied SIPVia
-	return &SIPVia{
-		Proto:  via.Proto,
-		Domain: via.Domain,
-		Port:   via.Port,
-		Branch: via.Branch,
-		Opts:   newOpts,
-	}
-}
-
-func Parse(via string) *SIPVia {
+func Parse(via string) (SIPVia, error) {
 	var sip_via SIPVia
-
-	sip_via.Opts = make(map[string]string)
 
 	var sp_pa string
 	var sent_proto string
@@ -45,7 +24,7 @@ func Parse(via string) *SIPVia {
 
 	space_idx := strings.Index(via, " ")
 	if space_idx == -1 {
-		return nil
+		return sip_via, errors.New("invalid Via header")
 	} else {
 		sent_proto = via[:space_idx]
 		sp_pa = via[space_idx+1:]
@@ -64,7 +43,7 @@ func Parse(via string) *SIPVia {
 	parseSentBy(sent_by, &sip_via)
 	parseParams(params, &sip_via)
 
-	return &sip_via
+	return sip_via, nil
 }
 
 func parseProto(proto string, via *SIPVia) {
@@ -95,13 +74,17 @@ func parseParams(params string, via *SIPVia) {
 			if kv[0] == "branch" {
 				via.Branch = kv[1]
 			} else {
+				if via.Opts == nil {
+					via.Opts = make(map[string]string)
+				}
+
 				via.Opts[kv[0]] = kv[1]
 			}
 		}
 	}
 }
 
-func Serialize(via *SIPVia) string {
+func (via SIPVia) Serialize() string {
 	var result strings.Builder
 
 	// Add protocol
@@ -125,11 +108,13 @@ func Serialize(via *SIPVia) string {
 	}
 
 	// Add other options
-	for k, v := range via.Opts {
-		result.WriteString(";")
-		result.WriteString(k)
-		result.WriteString("=")
-		result.WriteString(v)
+	if via.Opts != nil {
+		for k, v := range via.Opts {
+			result.WriteString(";")
+			result.WriteString(k)
+			result.WriteString("=")
+			result.WriteString(v)
+		}
 	}
 
 	return result.String()

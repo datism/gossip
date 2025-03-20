@@ -1,6 +1,7 @@
 package uri
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,42 +17,8 @@ type SIPUri struct {
 	Headers map[string]string
 }
 
-func (uri SIPUri) DeepCopy() *SIPUri {
-	// Deep copy the Opts map
-	var newOpts map[string]string
-	if uri.Opts != nil {
-		newOpts = make(map[string]string)
-		for key, value := range uri.Opts {
-			newOpts[key] = value
-		}
-	}
-
-	// Deep copy the Headers map
-	var newHeaders map[string]string
-	if uri.Headers != nil {
-		newHeaders = make(map[string]string)
-		for key, value := range uri.Headers {
-			newHeaders[key] = value
-		}
-	}
-
-	// Return the deep copied SIPUri
-	return &SIPUri{
-		Scheme:  uri.Scheme,
-		User:    uri.User,
-		Pass:    uri.Pass,
-		Domain:  uri.Domain,
-		Port:    uri.Port,
-		Opts:    newOpts,
-		Headers: newHeaders,
-	}
-}
-
-func Parse(uri string) *SIPUri {
+func Parse(uri string) (SIPUri, error) {
 	var sip_uri SIPUri
-
-	sip_uri.Opts = make(map[string]string)
-	sip_uri.Headers = make(map[string]string)
 
 	var ui_hp_up_hd string
 	var hp_up_hd string
@@ -64,11 +31,11 @@ func Parse(uri string) *SIPUri {
 
 	colon_idx := strings.Index(uri, ":")
 	if colon_idx == -1 {
-		return nil
+		return sip_uri, errors.New("invalid URI")
 	} else {
 		scheme := uri[:colon_idx]
 		if scheme != "sip" && scheme != "sips" && scheme != "tel" {
-			return nil
+			return sip_uri, errors.New("invalid URI")
 		} else {
 			sip_uri.Scheme = scheme
 			ui_hp_up_hd = uri[colon_idx+1:]
@@ -107,7 +74,7 @@ func Parse(uri string) *SIPUri {
 	parse_opts(opts, &sip_uri)
 	parse_headers(headers, &sip_uri)
 
-	return &sip_uri
+	return sip_uri, nil
 }
 
 func parse_user_info(user_info string, uri *SIPUri) {
@@ -146,6 +113,8 @@ func parse_host_port(host_port string, uri *SIPUri) {
 func parse_opts(opts string, uri *SIPUri) {
 	if opts == "" {
 		return
+	} else {
+		uri.Opts = make(map[string]string)
 	}
 
 	for _, kvs := range strings.Split(opts, ";") {
@@ -159,6 +128,8 @@ func parse_opts(opts string, uri *SIPUri) {
 func parse_headers(headers string, uri *SIPUri) {
 	if headers == "" {
 		return
+	} else {
+		uri.Headers = make(map[string]string)
 	}
 
 	for _, kvs := range strings.Split(headers, "&") {
@@ -169,7 +140,7 @@ func parse_headers(headers string, uri *SIPUri) {
 	}
 }
 
-func Serialize(uri *SIPUri) string {
+func (uri SIPUri) Serialize() string {
 	var result strings.Builder
 
 	// Add the scheme

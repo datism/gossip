@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"time"
 
 	"gossip/core"
 	"gossip/message"
@@ -32,19 +33,19 @@ func main() {
 	// }
 	// defer logFile.Close()
 
-	zerolog.SetGlobalLevel(zerolog.NoLevel)
+	zerolog.SetGlobalLevel(zerolog.Disabled)
 
-	// // Rotate log file by size using lumberjack
-	// log.Logger = log.Output(zerolog.MultiLevelWriter(
-	// 	zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339},
+	// Rotate log file by size using lumberjack
+	log.Logger = log.Output(zerolog.MultiLevelWriter(
+		zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339},
 	// 	&lumberjack.Logger{
 	// 		Filename:   "gossip.log",
 	// 		MaxSize:    1000,  // Max size in MB
 	// 		MaxBackups: 3,     // Max number of old log files to keep
 	// 		MaxAge:     28,    // Max number of days to keep old log files
 	// 		Compress:   false, // Compress old log files
-	// 	},
-	// ))
+	// },
+	))
 
 	go httpServer(":8080")
 
