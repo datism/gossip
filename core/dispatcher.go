@@ -1,7 +1,7 @@
 package core
 
 import (
-	"gossip/message"
+	"gossip/sipmess"
 	"gossip/transaction"
 	"gossip/transaction/ictrans"
 	"gossip/transaction/istrans"
@@ -18,7 +18,7 @@ var (
 	m  = make(map[transaction.TransID]transaction.Transaction)
 )
 
-func HandleMessage(msg *message.SIPMessage, transport *transport.Transport) {
+func HandleMessage(msg *sipmess.SIPMessage, transport *transport.Transport) {
 	log.Trace().Interface("message", msg).Msg("Handle message")
 
 	mu.Lock()
@@ -32,21 +32,21 @@ func HandleMessage(msg *message.SIPMessage, transport *transport.Transport) {
 			return
 		}
 
-		if msg.Request.Method == "ACK" {
+		if msg.Request.Method == sipmess.Ack {
 			log.Debug().Msg("Cannot start new transaction with ack request...process stateless")
-			Stateless_route(msg, transport)
+			StatelessRoute(msg, transport)
 			return
 		}
 
-		Statefull_route(msg, transport)
+		StatefullRoute(msg, transport)
 	}
 }
 
 func StartServerTransaction(
-	msg *message.SIPMessage,
+	msg *sipmess.SIPMessage,
 	transport *transport.Transport,
-	core_cb func(*transport.Transport, *message.SIPMessage),
-	tranport_cb func(*transport.Transport, *message.SIPMessage) bool,
+	core_cb func(*transport.Transport, *sipmess.SIPMessage),
+	tranport_cb func(*transport.Transport, *sipmess.SIPMessage) bool,
 	term_cb func(transaction.TransID, transaction.TERM_REASON),
 ) transaction.Transaction {
 	tid, err := transaction.MakeServerTransactionID(msg)
@@ -57,7 +57,7 @@ func StartServerTransaction(
 
 	var trans transaction.Transaction
 
-	if msg.Request.Method == "INVITE" {
+	if msg.Request.Method == sipmess.Ack {
 		trans = istrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	} else {
 		trans = nistrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
@@ -73,10 +73,10 @@ func StartServerTransaction(
 }
 
 func StartClientTransaction(
-	msg *message.SIPMessage,
+	msg *sipmess.SIPMessage,
 	transport *transport.Transport,
-	core_cb func(*transport.Transport, *message.SIPMessage),
-	tranport_cb func(*transport.Transport, *message.SIPMessage) bool,
+	core_cb func(*transport.Transport, *sipmess.SIPMessage),
+	tranport_cb func(*transport.Transport, *sipmess.SIPMessage) bool,
 	term_cb func(transaction.TransID, transaction.TERM_REASON),
 ) transaction.Transaction {
 
@@ -88,7 +88,7 @@ func StartClientTransaction(
 
 	var trans transaction.Transaction
 
-	if msg.CSeq.Method == "INVITE" {
+	if msg.CSeq.Method == sipmess.Invite {
 		trans = ictrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	} else {
 		trans = nictrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
@@ -110,7 +110,7 @@ func DeleteTransaction(tid transaction.TransID) {
 	mu.Unlock()
 }
 
-func FindTransaction(msg *message.SIPMessage) transaction.Transaction {
+func FindTransaction(msg *sipmess.SIPMessage) transaction.Transaction {
 	var tid transaction.TransID
 	var err error
 	if msg.Request != nil {

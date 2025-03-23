@@ -1,8 +1,7 @@
 package ictrans
 
 import (
-	"gossip/message"
-	"gossip/message/cseq"
+	"gossip/sipmess"
 	"gossip/transaction"
 	"gossip/transport"
 
@@ -91,22 +90,22 @@ type Ictrans struct {
 	id        transaction.TransID                                  // Transaction ID
 	state     state                                                // Current state of the transaction
 	transport *transport.Transport                                 // Transport layer
-	message   *message.SIPMessage                                  // The SIP message being processed (INVITE or response)
-	ack       *message.SIPMessage                                  // The ACK message to be generated
+	message   *sipmess.SIPMessage                                  // The SIP message being processed (INVITE or response)
+	ack       *sipmess.SIPMessage                                  // The ACK message to be generated
 	timers    [3]transaction.Timer                                 // The timers used to manage retransmissions and timeouts
-	transc    chan *message.SIPMessage                             // Channel for receiving events and processing them
-	trpt_cb   func(*transport.Transport, *message.SIPMessage) bool // Transport callback
-	core_cb   func(*transport.Transport, *message.SIPMessage)      // Core callback
+	transc    chan *sipmess.SIPMessage                             // Channel for receiving events and processing them
+	trpt_cb   func(*transport.Transport, *sipmess.SIPMessage) bool // Transport callback
+	core_cb   func(*transport.Transport, *sipmess.SIPMessage)      // Core callback
 	term_cb   func(transaction.TransID, transaction.TERM_REASON)
 }
 
 // Make creates a new instance of a client transaction, initializing timers and setting initial state
 func Make(
 	id transaction.TransID, // Transaction ID
-	msg *message.SIPMessage, // The INVITE message to be processed
+	msg *sipmess.SIPMessage, // The INVITE message to be processed
 	transport *transport.Transport, // Transport layer
-	core_callback func(*transport.Transport, *message.SIPMessage), // Core callback
-	transport_callback func(*transport.Transport, *message.SIPMessage) bool, // Transport layer callback
+	core_callback func(*transport.Transport, *sipmess.SIPMessage), // Core callback
+	transport_callback func(*transport.Transport, *sipmess.SIPMessage) bool, // Transport layer callback
 	term_callback func(transaction.TransID, transaction.TERM_REASON), // Termination callback
 ) *Ictrans {
 	timera := transaction.NewTimer() // Timer A for retransmissions
@@ -118,7 +117,7 @@ func Make(
 		id:        id,                                           // Set transaction ID
 		message:   msg,                                          // The initial SIP message (INVITE)
 		ack:       initAck(msg),                                 // ACK message to be generated
-		transc:    make(chan *message.SIPMessage, 5),            // Channel to communicate events
+		transc:    make(chan *sipmess.SIPMessage, 5),            // Channel to communicate events
 		timers:    [3]transaction.Timer{timera, timerb, timerd}, // Initialize timers
 		state:     calling,                                      // Start with the calling state
 		trpt_cb:   transport_callback,                           // Set transport callback
@@ -129,7 +128,7 @@ func Make(
 }
 
 // Event triggers an event in the transaction. The event can be a SIP message or timeout.
-func (trans Ictrans) Event(msg *message.SIPMessage) {
+func (trans Ictrans) Event(msg *sipmess.SIPMessage) {
 	if trans.state == terminated {
 		return
 	}
@@ -187,7 +186,7 @@ func (trans *Ictrans) handle_timer(timer timer) {
 }
 
 // handle_msg processes received SIP messages, transitioning states based on response codes
-func (trans *Ictrans) handle_msg(response *message.SIPMessage) {
+func (trans *Ictrans) handle_msg(response *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("message", response).Msg("Handling message event")
 
 	if response.Response == nil { // Invalid or missing response, ignore the event
@@ -224,13 +223,13 @@ func (trans *Ictrans) handle_msg(response *message.SIPMessage) {
 }
 
 // call_core_callback invokes the core callback to handle transaction-related events
-func call_core_callback(citrans *Ictrans, message *message.SIPMessage) {
+func call_core_callback(citrans *Ictrans, message *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", citrans.id.String()).Interface("message", message).Msg("Invoking core callback")
 	citrans.core_cb(citrans.transport, message) // Call the core callback
 }
 
 // call_transport_callback invokes the transport callback to send or receive messages
-func call_transport_callback(citrans *Ictrans, message *message.SIPMessage) {
+func call_transport_callback(citrans *Ictrans, message *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", citrans.id.String()).Interface("message", message).Msg("Invoking transport callback")
 	if !citrans.trpt_cb(citrans.transport, message) { // Call the transport callback
 		citrans.state = terminated
@@ -268,33 +267,33 @@ func call_term_callback(citrans *Ictrans, reason transaction.TERM_REASON) {
 		  	to ensure that the ACK can be routed properly through any downstream
 		  	stateless proxies.
 */
-func initAck(inv *message.SIPMessage) *message.SIPMessage {
-	ack_hdr := make(map[string][]string)
-	if sessionid := inv.GetHeader("session-id"); sessionid != nil {
-		ack_hdr["session-id"] = sessionid
+func initAck(inv *sipmess.SIPMessage) *sipmess.SIPMessage {
+	ack_hdr := make(map[sipmess.SIPHeader][][]byte)
+	if val, ok := inv.Headers[sipmess.SessionID]; ok {
+		ack_hdr[sipmess.SessionID] = val
 	}
-	if routes := inv.GetHeader("route"); routes != nil {
-		ack_hdr["route"] = routes
+	if val, ok := inv.Headers[sipmess.Route]; ok {
+		ack_hdr[sipmess.Route] = val
 	}
 
-	return &message.SIPMessage{
-		Startline: message.Startline{
-			Request: &message.Request{
-				Method:     "ACK",
+	return &sipmess.SIPMessage{
+		Startline: sipmess.Startline{
+			Request: &sipmess.Request{
+				Method:     sipmess.Ack,
 				RequestURI: inv.Request.RequestURI,
 			},
 		},
 		From:       inv.From,
 		CallID:     inv.CallID,
 		TopmostVia: inv.TopmostVia,
-		CSeq: cseq.SIPCseq{
-			Method: "ACK",
+		CSeq: sipmess.SIPCseq{
+			Method: sipmess.Ack,
 			Seq:    inv.CSeq.Seq,
 		},
 		Headers: ack_hdr,
 	}
 }
 
-func updateAck(ack *message.SIPMessage, response *message.SIPMessage) {
+func updateAck(ack *sipmess.SIPMessage, response *sipmess.SIPMessage) {
 	ack.To = response.To
 }

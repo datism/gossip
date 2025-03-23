@@ -1,8 +1,7 @@
 package core
 
 import (
-	"gossip/message"
-	"gossip/message/via"
+	"gossip/sipmess"
 	"gossip/transaction"
 	"gossip/transport"
 	"math/rand"
@@ -18,19 +17,19 @@ func GetMapSize() int {
 	return len(m)
 }
 
-func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
-	strans_chan := make(chan *message.SIPMessage, 3)
-	ctrans_chan := make(chan *message.SIPMessage, 3)
+func StatefullRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
+	strans_chan := make(chan *sipmess.SIPMessage, 3)
+	ctrans_chan := make(chan *sipmess.SIPMessage, 3)
 
-	strans_core_cb := func(transport *transport.Transport, message *message.SIPMessage) {
+	strans_core_cb := func(transport *transport.Transport, message *sipmess.SIPMessage) {
 		strans_chan <- message
 	}
 
-	ctrans_core_cb := func(transport *transport.Transport, message *message.SIPMessage) {
+	ctrans_core_cb := func(transport *transport.Transport, message *sipmess.SIPMessage) {
 		ctrans_chan <- message
 	}
 
-	trpt_cb := func(transport *transport.Transport, msg *message.SIPMessage) bool {
+	trpt_cb := func(transport *transport.Transport, msg *sipmess.SIPMessage) bool {
 		bin := msg.Serialize()
 		if bin == nil {
 			//serialize error
@@ -71,7 +70,7 @@ func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 	request = <-strans_chan
 
 	to_uri := request.To.Uri
-	address := net.JoinHostPort(to_uri.Domain, strconv.Itoa(to_uri.Port))
+	address := net.JoinHostPort(string(to_uri.Domain), strconv.Itoa(to_uri.Port))
 	dest_addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
 		return
@@ -83,9 +82,9 @@ func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 		RemoteAddr: dest_addr,
 	}
 
-	request.AddVia(via.SIPVia{
-		Proto:  "UDP",
-		Domain: dest_transp.LocalAddr.IP.String(),
+	request.AddVia(sipmess.SIPVia{
+		Proto:  []byte("UDP"),
+		Domain: []byte(dest_transp.LocalAddr.IP.String()),
 		Port:   dest_transp.LocalAddr.Port,
 		Branch: randSeq(5),
 	})
@@ -106,11 +105,7 @@ func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 
 			log.Debug().Msg("Forward response to server transaction")
 
-			if len(response.Headers["via"]) == 0 {
-				log.Error().Str("transaction_id", "ehh").Interface("handle_message", response).Msg("No via header in response")
-			}
-
-			response.RemoveVia()
+			response.DeleteVia()
 			server_trans.Event(response)
 
 			status := response.Response.StatusCode
@@ -121,13 +116,13 @@ func Statefull_route(request *message.SIPMessage, transp *transport.Transport) {
 	}
 }
 
-func Stateless_route(request *message.SIPMessage, transp *transport.Transport) {
+func StatelessRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
 	if request.Request == nil {
 		return
 	}
 
 	to_uri := request.To.Uri
-	address := net.JoinHostPort(to_uri.Domain, strconv.Itoa(to_uri.Port))
+	address := net.JoinHostPort(string(to_uri.Domain), strconv.Itoa(to_uri.Port))
 	DestAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
 		return
@@ -151,12 +146,12 @@ func Stateless_route(request *message.SIPMessage, transp *transport.Transport) {
 	}
 }
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-func randSeq(n int) string {
-	b := make([]rune, n)
+func randSeq(n int) []byte {
+	b := make([]byte, n)
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
-	return string(b)
+	return b
 }

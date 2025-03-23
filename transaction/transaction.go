@@ -1,8 +1,9 @@
 package transaction
 
 import (
+	"errors"
 	"fmt"
-	"gossip/message"
+	"gossip/sipmess"
 )
 
 type TransType int
@@ -35,19 +36,25 @@ const (
 	ERROR
 )
 
-type TransID struct {
-	// Type     TransType
-	BranchID string
-	Method   string
-	SentBy   string
-}
+type TransID string
 
 func (tid TransID) String() string {
-	return fmt.Sprintf("%s;%s;%s", tid.BranchID, tid.Method, tid.SentBy)
+	return string(tid)
 }
 
+// type TransID struct {
+// 	// Type     TransType
+// 	BranchID string
+// 	Method   string
+// 	SentBy   string
+// }
+
+// func (tid TransID) String() string {
+// 	return fmt.Sprintf("%s;%s;%s", tid.BranchID, tid.Method, tid.SentBy)
+// }
+
 type Transaction interface {
-	Event(*message.SIPMessage)
+	Event(*sipmess.SIPMessage)
 	Start()
 }
 
@@ -77,39 +84,32 @@ type Transaction interface {
 				transaction, except for ACK, where the method of the request
 				that created the transaction is INVITE.
 */
-func MakeServerTransactionID(msg *message.SIPMessage) (TransID, error) {
+func MakeServerTransactionID(msg *sipmess.SIPMessage) (TransID, error) {
 	topmostVia := msg.TopmostVia
 	branch := topmostVia.Branch
 
 	if msg.Request == nil {
-		return TransID{}, fmt.Errorf("request is nil")
+		return "", errors.New(("request is nil"))
 	}
 
 	method := msg.Request.Method
-	if method == "ACK" {
-		method = "INVITE"
+	if method == sipmess.Ack {
+		method = sipmess.Invite
 	}
 
-	return TransID{
-		BranchID: branch,
-		Method:   method,
-		SentBy:   topmostVia.Domain,
-	}, nil
+	return TransID(fmt.Sprintf("%s;%s;%s", branch, sipmess.SerializeMethod(method), topmostVia.Domain)), nil
 }
 
-func MakeClientTransactionID(msg *message.SIPMessage) (TransID, error) {
+func MakeClientTransactionID(msg *sipmess.SIPMessage) (TransID, error) {
 	topmostVia := msg.TopmostVia
 	branch := topmostVia.Branch
 
-	var method string
+	var method sipmess.SIPMethod
 	if msg.Request != nil {
 		method = msg.Request.Method
 	} else {
 		method = msg.CSeq.Method
 	}
 
-	return TransID{
-		BranchID: branch,
-		Method:   method,
-	}, nil
+	return TransID(fmt.Sprintf("%s;%s", branch, sipmess.SerializeMethod(method))), nil
 }

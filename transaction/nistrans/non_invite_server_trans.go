@@ -1,7 +1,7 @@
 package nistrans
 
 import (
-	"gossip/message"
+	"gossip/sipmess"
 	"gossip/transaction"
 	"gossip/transport"
 
@@ -101,23 +101,23 @@ func (s state) String() string {
 type NIstrans struct {
 	id        transaction.TransID                                  // Transaction ID
 	state     state                                                // Current state of the transaction
-	message   *message.SIPMessage                                  // The SIP message associated with the transaction
+	message   *sipmess.SIPMessage                                  // The SIP message associated with the transaction
 	transport *transport.Transport                                 // Transport layer for sending and receiving messages
-	last_res  *message.SIPMessage                                  // The last response received
+	last_res  *sipmess.SIPMessage                                  // The last response received
 	timers    [1]transaction.Timer                                 // Timer J for retransmission
-	transc    chan *message.SIPMessage                             // Channel for receiving events like timeouts or messages
-	trpt_cb   func(*transport.Transport, *message.SIPMessage) bool // Callback for transport layer
-	core_cb   func(*transport.Transport, *message.SIPMessage)      // Callback for core layer
+	transc    chan *sipmess.SIPMessage                             // Channel for receiving events like timeouts or messages
+	trpt_cb   func(*transport.Transport, *sipmess.SIPMessage) bool // Callback for transport layer
+	core_cb   func(*transport.Transport, *sipmess.SIPMessage)      // Callback for core layer
 	term_cb   func(transaction.TransID, transaction.TERM_REASON)
 }
 
 // Make creates and initializes a new NIstrans instance with the given message and callbacks
 func Make(
 	id transaction.TransID, // Transaction ID
-	msg *message.SIPMessage,
+	msg *sipmess.SIPMessage,
 	transport *transport.Transport,
-	core_callback func(*transport.Transport, *message.SIPMessage),
-	transport_callback func(*transport.Transport, *message.SIPMessage) bool,
+	core_callback func(*transport.Transport, *sipmess.SIPMessage),
+	transport_callback func(*transport.Transport, *sipmess.SIPMessage) bool,
 	term_callback func(transaction.TransID, transaction.TERM_REASON),
 ) *NIstrans {
 	// Create new timers for the transaction state machine
@@ -129,7 +129,7 @@ func Make(
 		id:        id,  // Set transaction ID
 		message:   msg, // Set the SIP message
 		transport: transport,
-		transc:    make(chan *message.SIPMessage, 5), // Channel for event communication
+		transc:    make(chan *sipmess.SIPMessage, 5), // Channel for event communication
 		timers:    [1]transaction.Timer{timerJ},      // Initialize Timer J
 		state:     trying,                            // Initial state is "trying"
 		trpt_cb:   transport_callback,                // Transport callback for message transmission
@@ -139,7 +139,7 @@ func Make(
 }
 
 // Event is used to send events to the transaction, which are handled in the start() method
-func (trans NIstrans) Event(msg *message.SIPMessage) {
+func (trans NIstrans) Event(msg *sipmess.SIPMessage) {
 	if trans.state == terminated {
 		return
 	}
@@ -188,7 +188,7 @@ func (trans *NIstrans) handle_timer(timer timer) {
 }
 
 // handle_msg processes received SIP messages (requests or responses)
-func (trans *NIstrans) handle_msg(msg *message.SIPMessage) {
+func (trans *NIstrans) handle_msg(msg *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", trans.id.String()).Str("state", trans.state.String()).Interface("message", msg).Msg("Handling message event")
 
 	// Handle incoming SIP request
@@ -219,13 +219,13 @@ func (trans *NIstrans) handle_msg(msg *message.SIPMessage) {
 }
 
 // call_core_callback invokes the core callback to handle transaction-related events
-func call_core_callback(trans *NIstrans, msg *message.SIPMessage) {
+func call_core_callback(trans *NIstrans, msg *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("message", msg).Msg("Invoking core callback")
 	trans.core_cb(trans.transport, msg)
 }
 
 // call_transport_callback invokes the transport callback to send or receive messages
-func call_transport_callback(trans *NIstrans, msg *message.SIPMessage) {
+func call_transport_callback(trans *NIstrans, msg *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("message", msg).Msg("Invoking transport callback")
 	if !trans.trpt_cb(trans.transport, msg) {
 		trans.state = terminated

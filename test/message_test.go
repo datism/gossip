@@ -1,162 +1,190 @@
 package test
 
 import (
-	"gossip/message"
-	"gossip/message/contact"
-	"gossip/message/cseq"
-	"gossip/message/fromto"
-	"gossip/message/uri"
-	"gossip/message/via"
+	"bytes"
+	"gossip/sipmess"
 	"reflect"
 	"testing"
 )
 
-func TestParseRequest(t *testing.T) {
-	data := []byte("INVITE sip:bob@biloxi.com SIP/2.0\r\n" +
-		"Via: SIP/2.0/UDP server10.biloxi.com;branch=1234\r\n" +
-		"Via: SIP/2.0/UDP server11.biloxi.com;branch=abcd\r\n" +
-		"Max-Forwards: 70\r\n" +
-		"To: <sip:bob@biloxi.com>\r\n" +
-		"From: <sip:alice@atlanta.com>;tag=1928301774\r\n" +
-		"Call-ID: a84b4c76e66710\r\n" +
-		"CSeq: 314159 INVITE\r\n" +
-		"Contact: <sip:alice@pc33.atlanta.com>,<sip:alice1@pc33.atlanta.com>\r\n" +
-		"Content-Type: application/sdp\r\n" +
-		"Content-Length: 0\r\n" +
-		"\r\n")
-
-	expected := &message.SIPMessage{
-		Startline: message.Startline{
-			Request: &message.Request{
-				Method: "INVITE",
-				RequestURI: &uri.SIPUri{
-					Scheme:  "sip",
-					User:    "bob",
-					Domain:  "biloxi.com",
-					Port:    -1,
-					Opts:    map[string]string{},
-					Headers: map[string]string{},
+func TestParseSIPMessage(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    *sipmess.SIPMessage
+		wantErr bool
+	}{
+		{
+			name: "Parse simple INVITE request",
+			input: "INVITE sip:bob@example.com SIP/2.0\r\n" +
+				"Via: SIP/2.0/UDP 192.168.1.1:5060;branch=z9hG4bK776asdhds\r\n" +
+				"From: Alice <sip:alice@example.com>;tag=1928301774\r\n" +
+				"To: Bob <sip:bob@example.com>\r\n" +
+				"Call-ID: a84b4c76e66710@pc33.example.com\r\n" +
+				"CSeq: 314159 INVITE\r\n" +
+				"Contact: <sip:alice@192.168.1.1>\r\n" +
+				"Content-Type: application/sdp\r\n" +
+				"Content-Length: 13\r\n" +
+				"\r\n" +
+				"Test SDP body",
+			want: &sipmess.SIPMessage{
+				Startline: sipmess.Startline{
+					Request: &sipmess.Request{
+						Method:     sipmess.Invite,
+						RequestURI: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Port: -1, Domain: []byte("example.com")},
+					},
+				},
+				TopmostVia: sipmess.SIPVia{
+					Proto:  []byte("SIP/2.0/UDP"),
+					Domain: []byte("192.168.1.1"),
+					Port:   5060,
+					Branch: []byte("z9hG4bK776asdhds"),
+				},
+				From: sipmess.SIPFromTo{
+					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("example.com"), Port: -1},
+					Tag: []byte("1928301774"),
+				},
+				To: sipmess.SIPFromTo{
+					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Domain: []byte("example.com"), Port: -1},
+				},
+				CallID: []byte("a84b4c76e66710@pc33.example.com"),
+				CSeq: sipmess.SIPCseq{
+					Seq:    314159,
+					Method: sipmess.Invite,
+				},
+				Contacts: []sipmess.SIPContact{
+					{
+						Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("192.168.1.1"), Port: -1},
+					},
+				},
+				Headers: map[sipmess.SIPHeader][][]byte{
+					sipmess.ContentType:   {[]byte("application/sdp")},
+					sipmess.ContentLength: {[]byte("13")},
+				},
+				Body: []byte("Test SDP body"),
+				Options: sipmess.ParseOptions{
+					ParseTopMostVia: true,
+					ParseFrom:       true,
+					ParseTo:         true,
+					ParseCallID:     true,
+					ParseCseq:       true,
+					ParseContacts:   true,
 				},
 			},
+			wantErr: false,
 		},
-		From: &fromto.SIPFromTo{
-			Uri: &uri.SIPUri{
-				Scheme:  "sip",
-				User:    "alice",
-				Domain:  "atlanta.com",
-				Port:    -1,
-				Opts:    map[string]string{},
-				Headers: map[string]string{},
-			},
-			Tag:   "1928301774",
-			Paras: map[string]string{},
-		},
-		To: &fromto.SIPFromTo{
-			Uri: &uri.SIPUri{
-				Scheme:  "sip",
-				User:    "bob",
-				Domain:  "biloxi.com",
-				Port:    -1,
-				Opts:    map[string]string{},
-				Headers: map[string]string{},
-			},
-			Paras: map[string]string{},
-		},
-		CallID: "a84b4c76e66710",
-		Contacts: []*contact.SIPContact{
-			{
-				DisName: "",
-				Uri: &uri.SIPUri{
-					Scheme:  "sip",
-					User:    "alice",
-					Domain:  "pc33.atlanta.com",
-					Port:    -1,
-					Opts:    map[string]string{},
-					Headers: map[string]string{},
+		{
+			name: "Parse simple SIP response",
+			input: "SIP/2.0 200 OK\r\n" +
+				"Via: SIP/2.0/UDP 192.168.1.1:5060;branch=z9hG4bK776asdhds\r\n" +
+				"From: Alice <sip:alice@example.com>;tag=1928301774\r\n" +
+				"To: Bob <sip:bob@example.com>;tag=a6c85cf\r\n" +
+				"Call-ID: a84b4c76e66710@pc33.example.com\r\n" +
+				"CSeq: 314159 INVITE\r\n" +
+				"Contact: <sip:bob@192.168.1.2>\r\n" +
+				"Content-Length: 0\r\n" +
+				"\r\n",
+			want: &sipmess.SIPMessage{
+				Startline: sipmess.Startline{
+					Response: &sipmess.Response{
+						StatusCode:   200,
+						ReasonPhrase: []byte("OK"),
+					},
 				},
-				Paras: map[string]string{},
-				Supported: []string{},
-			},
-			{
-				DisName: "",
-				Uri: &uri.SIPUri{
-					Scheme:  "sip",
-					User:    "alice1",
-					Domain:  "pc33.atlanta.com",
-					Port:    -1,
-					Opts:    map[string]string{},
-					Headers: map[string]string{},
+				TopmostVia: sipmess.SIPVia{
+					Proto:  []byte("SIP/2.0/UDP"),
+					Domain: []byte("192.168.1.1"),
+					Port:   5060,
+					Branch: []byte("z9hG4bK776asdhds"),
 				},
-				Paras: map[string]string{},
-				Supported: []string{},
+				From: sipmess.SIPFromTo{
+					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("example.com"), Port: -1},
+					Tag: []byte("1928301774"),
+				},
+				To: sipmess.SIPFromTo{
+					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Domain: []byte("example.com"), Port: -1},
+					Tag: []byte("a6c85cf"),
+				},
+				CallID: []byte("a84b4c76e66710@pc33.example.com"),
+				CSeq: sipmess.SIPCseq{
+					Seq:    314159,
+					Method: sipmess.Invite,
+				},
+				Contacts: []sipmess.SIPContact{
+					{
+						Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Domain: []byte("192.168.1.2"), Port: -1},
+					},
+				},
+				Headers: map[sipmess.SIPHeader][][]byte{
+					sipmess.ContentLength: {[]byte("0")},
+				},
+				Body: []byte(""),
+				Options: sipmess.ParseOptions{
+					ParseTopMostVia: true,
+					ParseFrom:       true,
+					ParseTo:         true,
+					ParseCallID:     true,
+					ParseCseq:       true,
+					ParseContacts:   true,
+				},
 			},
+			wantErr: false,
 		},
-		CSeq: &cseq.SIPCseq{
-			Method: "INVITE",
-			Seq:    314159,
+		{
+			name:    "Parse invalid message",
+			input:   "This is not a SIP message",
+			want:    nil,
+			wantErr: true,
 		},
-		TopmostVia: &via.SIPVia{
-			Proto:  "UDP",
-			Domain: "server10.biloxi.com",
-			Branch: "1234",
-			Opts:   map[string]string{},
-		},
-
-		Headers: map[string][]string{
-			"via":            {"SIP/2.0/UDP server11.biloxi.com;branch=abcd"},
-			"max-forwards":   {"70"},
-			"content-type":   {"application/sdp"},
-			"content-length": {"0"},
-		},
-		Body: []byte(""),
 	}
 
-	msg, err := message.Parse(data)
-	if err != nil {
-		t.Fatalf("Error parsing SIP request: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := sipmess.ParseSipMessage([]byte(tt.input), sipmess.ParseOptions{
+				ParseTopMostVia: true,
+				ParseFrom:       true,
+				ParseTo:         true,
+				ParseCallID:     true,
+				ParseCseq:       true,
+				ParseContacts:   true,
+			})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseSIPMessage() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 
-	if !reflect.DeepEqual(msg, expected) {
-		t.Errorf("Parsed SIP request does not match expected result.\nGot: %+v\nExpected: %+v", msg.Contacts, expected.Contacts)
+			if err != nil {
+				return
+			}
+
+			// Compare specific fields for more readable test failures
+			if !reflect.DeepEqual(got.Request, tt.want.Request) {
+				t.Errorf("Request mismatch, got = %v, want %v", got.Request, tt.want.Request)
+			}
+			if !reflect.DeepEqual(got.Response, tt.want.Response) {
+				t.Errorf("Response mismatch, got = %v, want %v", got.Response, tt.want.Response)
+			}
+			if !reflect.DeepEqual(got.TopmostVia, tt.want.TopmostVia) {
+				t.Errorf("TopmostVia mismatch, got = %#v, want %#v", got.TopmostVia, tt.want.TopmostVia)
+			}
+			if !reflect.DeepEqual(got.From, tt.want.From) {
+				t.Errorf("From mismatch, got = %v, want %v", got.From, tt.want.From)
+			}
+			if !reflect.DeepEqual(got.To, tt.want.To) {
+				t.Errorf("To mismatch, got = %v, want %v", got.To, tt.want.To)
+			}
+			if !bytes.Equal(got.CallID, tt.want.CallID) {
+				t.Errorf("CallID mismatch, got = %s, want %s", got.CallID, tt.want.CallID)
+			}
+			if !reflect.DeepEqual(got.CSeq, tt.want.CSeq) {
+				t.Errorf("CSeq mismatch, got = %v, want %v", got.CSeq, tt.want.CSeq)
+			}
+			if !reflect.DeepEqual(got.Contacts, tt.want.Contacts) {
+				t.Errorf("Contacts mismatch, got = %v, want %v", got.Contacts, tt.want.Contacts)
+			}
+			if !bytes.Equal(got.Body, tt.want.Body) {
+				t.Errorf("Body mismatch, got = %s, want %s", got.Body, tt.want.Body)
+			}
+		})
 	}
 }
-
-// func TestParseResponse(t *testing.T) {
-// 	data := []byte("SIP/2.0 200 OK\r\n" +
-// 		"Via: SIP/2.0/UDP server10.biloxi.com\r\n" +
-// 		"To: <sip:bob@biloxi.com>;tag=314159\r\n" +
-// 		"From: <sip:alice@atlanta.com>;tag=1928301774\r\n" +
-// 		"Call-ID: a84b4c76e66710\r\n" +
-// 		"CSeq: 314159 INVITE\r\n" +
-// 		"Contact: <sip:bob@biloxi.com>\r\n" +
-// 		"Content-Length: 0\r\n" +
-// 		"\r\n")
-
-// 	expected := &message.SIPMessage{
-// 		Startline: message.Startline{
-// 			Response: &message.Response{
-// 				StatusCode:   200,
-// 				ReasonPhrase: "OK",
-// 			},
-// 		},
-// 		Headers: map[string][]string{
-// 			"via":            {"SIP/2.0/UDP server10.biloxi.com"},
-// 			"to":             {"<sip:bob@biloxi.com>;tag=314159"},
-// 			"from":           {"<sip:alice@atlanta.com>;tag=1928301774"},
-// 			"call-id":        {"a84b4c76e66710"},
-// 			"cseq":           {"314159 INVITE"},
-// 			"contact":        {"<sip:bob@biloxi.com>"},
-// 			"content-length": {"0"},
-// 		},
-// 		Body: []byte(""),
-// 	}
-
-// 	msg, err := message.Parse(data)
-// 	if err != nil {
-// 		t.Fatalf("Error parsing SIP response: %v", err)
-// 	}
-
-// 	if !reflect.DeepEqual(msg, expected) {
-// 		t.Errorf("Parsed SIP response does not match expected result.\nGot: %+v\nExpected: %+v", msg, expected)
-// 	}
-// }

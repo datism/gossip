@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"gossip/core"
-	"gossip/message"
+	"gossip/sipmess"
 	"gossip/transport"
 
 	"github.com/arl/statsviz"
@@ -93,7 +93,12 @@ func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
 		Str("client", clientAddr.String()).
 		Msg("Received message")
 
-	msg, err := message.Parse(data)
+	msg, err := sipmess.ParseSipMessage(data, sipmess.ParseOptions{
+		ParseFrom:       true,
+		ParseTo:         true,
+		ParseCseqByType: true,
+		ParseTopMostVia: true,
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("Error parsing SIP request")
 		return
@@ -118,12 +123,6 @@ func httpServer(address string) {
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		w.Write([]byte("Alive"))
-	})
-
-	http.HandleFunc("/map_size", func(w http.ResponseWriter, r *http.Request) {
-		data, _ := json.MarshalIndent(core.GetMapSize(), "", "  ")
-		w.WriteHeader(200)
-		w.Write(data)
 	})
 
 	http.HandleFunc("/mem", func(w http.ResponseWriter, r *http.Request) {
