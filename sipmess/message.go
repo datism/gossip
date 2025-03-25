@@ -269,6 +269,7 @@ func (msg SIPMessage) Serialize() []byte {
 		}
 	}
 
+	var hasSerializedVia bool
 	if msg.Options.ParseTopMostVia {
 		hdrsSr = append(hdrsSr, "Via: "...)
 		hdrsSr = append(hdrsSr, msg.TopmostVia.Serialize()...)
@@ -280,12 +281,18 @@ func (msg SIPMessage) Serialize() []byte {
 				hdrsSr = append(hdrsSr, via...)
 				hdrsSr = append(hdrsSr, '\r', '\n')
 			}
-			delete(msg.Headers, Via)
 		}
+
+		hasSerializedVia = true
 	}
 
 	for hdr, vals := range msg.Headers {
 		var hdrSr []byte
+
+		if hdr == Via && hasSerializedVia {
+			continue
+		}
+
 		hdrNameSr := SerializeHeaderName(hdr)
 		for _, val := range vals {
 			hdrSr = append(hdrSr, hdrNameSr...)

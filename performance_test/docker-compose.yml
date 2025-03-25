@@ -10,6 +10,9 @@ services:
     volumes:
       - ../..//gossip:/usr/src/gossip
 
+    cpus: 4.0
+    cpuset: "0,1,2,3"
+
     networks:
       mynet:
         ipv4_address: 10.4.0.20
