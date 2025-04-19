@@ -2,8 +2,8 @@ package core
 
 import (
 	"gossip/sipmess"
-	"gossip/transaction"
-	"gossip/transport"
+	"gossip/siptrans"
+	"gossip/siptransp"
 	"math/rand"
 	"net"
 	"strconv"
@@ -17,19 +17,19 @@ func GetMapSize() int {
 	return len(m)
 }
 
-func StatefullRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
+func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 	strans_chan := make(chan *sipmess.SIPMessage, 3)
 	ctrans_chan := make(chan *sipmess.SIPMessage, 3)
 
-	strans_core_cb := func(transport *transport.Transport, message *sipmess.SIPMessage) {
+	strans_core_cb := func(transport *siptransp.Transport, message *sipmess.SIPMessage) {
 		strans_chan <- message
 	}
 
-	ctrans_core_cb := func(transport *transport.Transport, message *sipmess.SIPMessage) {
+	ctrans_core_cb := func(transport *siptransp.Transport, message *sipmess.SIPMessage) {
 		ctrans_chan <- message
 	}
 
-	trpt_cb := func(transport *transport.Transport, msg *sipmess.SIPMessage) bool {
+	trpt_cb := func(transport *siptransp.Transport, msg *sipmess.SIPMessage) bool {
 		bin := msg.Serialize()
 		if bin == nil {
 			//serialize error
@@ -45,27 +45,27 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
 		return true
 	}
 
-	strans_term_cb := func(id transaction.TransID, reason transaction.TERM_REASON) {
-		if reason != transaction.NORMAL {
-			log.Error().Str("transaction_id", id.String()).Msg("Transaction terminated with error " + reason.String())
+	strans_term_cb := func(id siptrans.TransID, reason siptrans.TERM_REASON) {
+		if reason != siptrans.NORMAL {
+			log.Error().Str("siptrans_id", id.String()).Msg("siptrans terminated with error " + reason.String())
 			strans_chan <- nil
 		} else {
-			log.Debug().Str("transaction_id", id.String()).Msg("Transaction terminated normally")
+			log.Debug().Str("siptrans_id", id.String()).Msg("siptrans terminated normally")
 		}
-		DeleteTransaction(id)
+		Deletesiptrans(id)
 	}
 
-	ctrans_term_cb := func(id transaction.TransID, reason transaction.TERM_REASON) {
-		if reason != transaction.NORMAL {
-			log.Error().Str("transaction_id", id.String()).Msg("Transaction terminated with error " + reason.String())
+	ctrans_term_cb := func(id siptrans.TransID, reason siptrans.TERM_REASON) {
+		if reason != siptrans.NORMAL {
+			log.Error().Str("siptrans_id", id.String()).Msg("siptrans terminated with error " + reason.String())
 			ctrans_chan <- nil
 		} else {
-			log.Debug().Str("transaction_id", id.String()).Msg("Transaction terminated normally")
+			log.Debug().Str("siptrans_id", id.String()).Msg("siptrans terminated normally")
 		}
-		DeleteTransaction(id)
+		Deletesiptrans(id)
 	}
 
-	server_trans := StartServerTransaction(request, transp, strans_core_cb, trpt_cb, strans_term_cb)
+	server_trans := StartServersiptrans(request, transp, strans_core_cb, trpt_cb, strans_term_cb)
 
 	request = <-strans_chan
 
@@ -75,7 +75,7 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
 	if err != nil {
 		return
 	}
-	dest_transp := &transport.Transport{
+	dest_transp := &siptransp.Transport{
 		Protocol:   "UDP",
 		Conn:       transp.Conn,
 		LocalAddr:  transp.LocalAddr,
@@ -89,7 +89,7 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
 		Branch: randSeq(5),
 	})
 
-	StartClientTransaction(request, dest_transp, ctrans_core_cb, trpt_cb, ctrans_term_cb)
+	StartClientsiptrans(request, dest_transp, ctrans_core_cb, trpt_cb, ctrans_term_cb)
 
 	for {
 		select {
@@ -99,11 +99,11 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
 			}
 		case response := <-ctrans_chan:
 			if response == nil {
-				log.Error().Msg("Error in client transaction")
+				log.Error().Msg("Error in client siptrans")
 				return
 			}
 
-			log.Debug().Msg("Forward response to server transaction")
+			log.Debug().Msg("Forward response to server siptrans")
 
 			response.DeleteVia()
 			server_trans.Event(response)
@@ -116,7 +116,7 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
 	}
 }
 
-func StatelessRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
+func StatelessRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 	if request.Request == nil {
 		return
 	}
@@ -127,7 +127,7 @@ func StatelessRoute(request *sipmess.SIPMessage, transp *transport.Transport) {
 	if err != nil {
 		return
 	}
-	DestTransport := transport.Transport{
+	DestTransport := siptransp.Transport{
 		Protocol:   "UDP",
 		Conn:       transp.Conn,
 		LocalAddr:  transp.LocalAddr,

@@ -3,15 +3,14 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"gossip/core"
+	"gossip/sipmess"
+	"gossip/siptransp"
 	"net"
 	"net/http"
 	"os"
 	"runtime"
 	"time"
-
-	"gossip/core"
-	"gossip/sipmess"
-	"gossip/transport"
 
 	"github.com/arl/statsviz"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -109,7 +108,7 @@ func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
 		log.Error().Msg("Error asserting local address to UDPAddr")
 	}
 
-	transport := &transport.Transport{
+	transport := &siptransp.Transport{
 		Protocol:   "UDP",
 		Conn:       conn,
 		LocalAddr:  udpAddr,

@@ -1,7 +1,6 @@
-package transaction
+package siptrans
 
 import (
-	"errors"
 	"fmt"
 	"gossip/sipmess"
 )
@@ -89,7 +88,7 @@ func MakeServerTransactionID(msg *sipmess.SIPMessage) (TransID, error) {
 	branch := topmostVia.Branch
 
 	if msg.Request == nil {
-		return "", errors.New(("request is nil"))
+		return "", fmt.Errorf("request is nil")
 	}
 
 	method := msg.Request.Method

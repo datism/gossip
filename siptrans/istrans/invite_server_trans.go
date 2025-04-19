@@ -2,8 +2,8 @@ package istrans
 
 import (
 	"gossip/sipmess"
-	"gossip/transaction"
-	"gossip/transport"
+	"gossip/siptrans"
+	"gossip/siptransp"
 
 	"github.com/rs/zerolog/log"
 )
@@ -98,45 +98,45 @@ const (
 
 // Sitrans represents the state machine for an INVITE transaction
 type Sitrans struct {
-	id        transaction.TransID                                  // Transaction ID
+	id        siptrans.TransID                                     // Transaction ID
 	state     state                                                // Current state of the transaction
 	message   *sipmess.SIPMessage                                  // The SIP message associated with the transaction
-	transport *transport.Transport                                 // Transport layer for sending and receiving messages
+	transport *siptransp.Transport                                 // Transport layer for sending and receiving messages
 	last_res  *sipmess.SIPMessage                                  // The last response received
-	timers    [4]transaction.Timer                                 // List of timers used for managing retransmissions and timeouts
+	timers    [4]siptrans.Timer                                    // List of timers used for managing retransmissions and timeouts
 	transc    chan *sipmess.SIPMessage                             // Channel for receiving events like timeouts or messages
-	trpt_cb   func(*transport.Transport, *sipmess.SIPMessage) bool // Transport callback
-	core_cb   func(*transport.Transport, *sipmess.SIPMessage)      // Core callback
-	term_cb   func(transaction.TransID, transaction.TERM_REASON)
+	trpt_cb   func(*siptransp.Transport, *sipmess.SIPMessage) bool // Transport callback
+	core_cb   func(*siptransp.Transport, *sipmess.SIPMessage)      // Core callback
+	term_cb   func(siptrans.TransID, siptrans.TERM_REASON)
 }
 
 // Make creates and initializes a new Sitrans instance with the given message and callbacks
 func Make(
-	id transaction.TransID, // Transaction ID
+	id siptrans.TransID, // Transaction ID
 	msg *sipmess.SIPMessage,
-	transport *transport.Transport,
-	core_callback func(*transport.Transport, *sipmess.SIPMessage), // Core callback
-	transport_callback func(*transport.Transport, *sipmess.SIPMessage) bool, // Transport layer callback
-	term_callback func(transaction.TransID, transaction.TERM_REASON), // Termination callback
+	transport *siptransp.Transport,
+	core_callback func(*siptransp.Transport, *sipmess.SIPMessage), // Core callback
+	transport_callback func(*siptransp.Transport, *sipmess.SIPMessage) bool, // Transport layer callback
+	term_callback func(siptrans.TransID, siptrans.TERM_REASON), // Termination callback
 ) *Sitrans {
 	// Create new timers for the transaction state machine
-	timerprv := transaction.NewTimer()
-	timerg := transaction.NewTimer()
-	timerdh := transaction.NewTimer()
-	timeri := transaction.NewTimer()
+	timerprv := siptrans.NewTimer()
+	timerg := siptrans.NewTimer()
+	timerdh := siptrans.NewTimer()
+	timeri := siptrans.NewTimer()
 
 	log.Trace().Str("transaction_id", id.String()).Interface("message", msg).Interface("transport", transport).Msg("Creating new INVITE server transaction")
 	// Return a new Sitrans instance with the provided parameters
 	return &Sitrans{
-		id:        id,                                                      // Set transaction ID
-		message:   msg,                                                     // Set the SIP message
-		transport: transport,                                               // Set the transport layer
-		transc:    make(chan *sipmess.SIPMessage, 5),                       // Channel for event communication
-		timers:    [4]transaction.Timer{timerprv, timerg, timerdh, timeri}, // Initialize the timers array
-		state:     proceeding,                                              // Initial state is "proceeding"
-		trpt_cb:   transport_callback,                                      // Transport callback for message transmission
-		core_cb:   core_callback,                                           // Core callback for message handling in the application logic
-		term_cb:   term_callback,                                           // Termination callback for the transaction
+		id:        id,                                                   // Set transaction ID
+		message:   msg,                                                  // Set the SIP message
+		transport: transport,                                            // Set the transport layer
+		transc:    make(chan *sipmess.SIPMessage, 5),                    // Channel for event communication
+		timers:    [4]siptrans.Timer{timerprv, timerg, timerdh, timeri}, // Initialize the timers array
+		state:     proceeding,                                           // Initial state is "proceeding"
+		trpt_cb:   transport_callback,                                   // Transport callback for message transmission
+		core_cb:   core_callback,                                        // Core callback for message handling in the application logic
+		term_cb:   term_callback,                                        // Termination callback for the transaction
 	}
 }
 
@@ -191,7 +191,7 @@ func (trans *Sitrans) handle_timer(timer timer) {
 	if timer == timer_h {
 		// Timer H expired: Transaction is terminated due to timeout
 		trans.state = terminated
-		call_term_callback(trans, transaction.TIMEOUT)
+		call_term_callback(trans, siptrans.TIMEOUT)
 	} else if timer == timer_prv && trans.state == proceeding {
 		// Timer Prv expired: Send 100 TRYING response
 		trying100 := makeGenericResponse(100, []byte("TRYING"), trans.message)
@@ -203,7 +203,7 @@ func (trans *Sitrans) handle_timer(timer timer) {
 	} else if timer == timer_i && trans.state == confirmed {
 		// Timer I expired: Move to the terminated state (final step)
 		trans.state = terminated
-		call_term_callback(trans, transaction.NORMAL)
+		call_term_callback(trans, siptrans.NORMAL)
 	}
 }
 
@@ -238,7 +238,7 @@ func (trans *Sitrans) handle_msg(msg *sipmess.SIPMessage) {
 	} else if status_code >= 200 && status_code <= 300 && trans.state == proceeding {
 		// Final 2xx responses: Transition to terminated state
 		trans.state = terminated
-		call_term_callback(trans, transaction.NORMAL)
+		call_term_callback(trans, siptrans.NORMAL)
 		call_transport_callback(trans, msg)
 	} else if status_code > 300 {
 		// Error responses (3xx-6xx): Transition to "completed" state
@@ -261,11 +261,11 @@ func call_transport_callback(sitrans *Sitrans, message *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", sitrans.id.String()).Interface("message", message).Msg("Invoking transport callback")
 	if !sitrans.trpt_cb(sitrans.transport, message) { // Call the transport callback
 		sitrans.state = terminated
-		call_term_callback(sitrans, transaction.ERROR)
+		call_term_callback(sitrans, siptrans.ERROR)
 	}
 }
 
-func call_term_callback(sitrans *Sitrans, reason transaction.TERM_REASON) {
+func call_term_callback(sitrans *Sitrans, reason siptrans.TERM_REASON) {
 	log.Trace().Str("transaction_id", sitrans.id.String()).Interface("termination_reason", reason).Msg("Invoking termination callback")
 	sitrans.term_cb(sitrans.id, reason)
 }

@@ -1,4 +1,4 @@
-package transport
+package siptransp
 
 import (
 	"net"

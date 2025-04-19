@@ -2,8 +2,8 @@ package nictrans
 
 import (
 	"gossip/sipmess"
-	"gossip/transaction"
-	"gossip/transport"
+	"gossip/siptrans"
+	"gossip/siptransp"
 
 	"github.com/rs/zerolog/log"
 )
@@ -95,30 +95,30 @@ const (
 
 // NIctrans represents the state machine for a Non-Invite Client Transaction
 type NIctrans struct {
-	id        transaction.TransID                                  // Transaction ID
+	id        siptrans.TransID                                     // Transaction ID
 	state     state                                                // Current state of the transaction
 	message   *sipmess.SIPMessage                                  // The SIP message associated with the transaction
-	transport *transport.Transport                                 // Transport layer for sending and receiving messages
-	timers    [3]transaction.Timer                                 // Timers used for retransmission and timeout
+	transport *siptransp.Transport                                 // Transport layer for sending and receiving messages
+	timers    [3]siptrans.Timer                                    // Timers used for retransmission and timeout
 	transc    chan *sipmess.SIPMessage                             // Channel for receiving events like timeouts or messages
-	trpt_cb   func(*transport.Transport, *sipmess.SIPMessage) bool // Callback for transport layer
-	core_cb   func(*transport.Transport, *sipmess.SIPMessage)      // Callback for core layer
-	term_cb   func(transaction.TransID, transaction.TERM_REASON)
+	trpt_cb   func(*siptransp.Transport, *sipmess.SIPMessage) bool // Callback for transport layer
+	core_cb   func(*siptransp.Transport, *sipmess.SIPMessage)      // Callback for core layer
+	term_cb   func(siptrans.TransID, siptrans.TERM_REASON)
 }
 
 // Make creates and initializes a new NIctrans instance with the given message and callbacks
 func Make(
-	id transaction.TransID, // Transaction ID
+	id siptrans.TransID, // Transaction ID
 	msg *sipmess.SIPMessage,
-	transport *transport.Transport,
-	core_callback func(*transport.Transport, *sipmess.SIPMessage),
-	transport_callback func(*transport.Transport, *sipmess.SIPMessage) bool,
-	term_callback func(transaction.TransID, transaction.TERM_REASON),
+	transport *siptransp.Transport,
+	core_callback func(*siptransp.Transport, *sipmess.SIPMessage),
+	transport_callback func(*siptransp.Transport, *sipmess.SIPMessage) bool,
+	term_callback func(siptrans.TransID, siptrans.TERM_REASON),
 ) *NIctrans {
 	// Create new timers for the transaction state machine
-	timerE := transaction.NewTimer() // Retransmission Timer
-	timerF := transaction.NewTimer() // Timeout Timer
-	timerK := transaction.NewTimer() // Timer for completed state
+	timerE := siptrans.NewTimer() // Retransmission Timer
+	timerF := siptrans.NewTimer() // Timeout Timer
+	timerK := siptrans.NewTimer() // Timer for completed state
 
 	log.Trace().Str("transaction_id", id.String()).Interface("message", msg).Interface("transport", transport).Msg("Creating new Non-Invite client transaction")
 	// Return a new NIctrans instance with the provided parameters
@@ -126,12 +126,12 @@ func Make(
 		id:        id, // Set transaction ID
 		message:   msg,
 		transport: transport,
-		transc:    make(chan *sipmess.SIPMessage, 5),            // Channel for event communication
-		timers:    [3]transaction.Timer{timerE, timerF, timerK}, // Initialize the timers array
-		state:     trying,                                       // Initial state is "trying"
-		trpt_cb:   transport_callback,                           // Transport callback for message transmission
-		core_cb:   core_callback,                                // Core callback for message handling in the application logic
-		term_cb:   term_callback,                                // Termination callback for the transaction
+		transc:    make(chan *sipmess.SIPMessage, 5),         // Channel for event communication
+		timers:    [3]siptrans.Timer{timerE, timerF, timerK}, // Initialize the timers array
+		state:     trying,                                    // Initial state is "trying"
+		trpt_cb:   transport_callback,                        // Transport callback for message transmission
+		core_cb:   core_callback,                             // Core callback for message handling in the application logic
+		term_cb:   term_callback,                             // Termination callback for the transaction
 	}
 }
 
@@ -184,13 +184,13 @@ func (trans *NIctrans) handle_timer(timer timer) {
 	log.Trace().Str("transaction_id", trans.id.String()).Str("timer", timer.String()).Msg("Handling timer event")
 	if timer == timer_f && trans.state < completed { // Timer F expired, inform TU of timeout and terminate transaction
 		trans.state = terminated
-		call_term_callback(trans, transaction.TIMEOUT)
+		call_term_callback(trans, siptrans.TIMEOUT)
 	} else if timer == timer_e && trans.state < completed { // Timer E expired in trying, proceeding state, retransmit request
 		trans.timers[timer_e].Start(min(trans.timers[timer_e].Duration()*2, t2)) // Double Timer E duration
 		call_transport_callback(trans, trans.message)
 	} else if timer == timer_k && trans.state == completed { // Timer D expired in completed state, terminate transaction
 		trans.state = terminated
-		call_term_callback(trans, transaction.NORMAL)
+		call_term_callback(trans, siptrans.NORMAL)
 	}
 }
 
@@ -225,12 +225,12 @@ func call_transport_callback(trans *NIctrans, msg *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("message", msg).Msg("Invoking transport callback")
 	if !trans.trpt_cb(trans.transport, msg) {
 		trans.state = terminated
-		call_term_callback(trans, transaction.ERROR)
+		call_term_callback(trans, siptrans.ERROR)
 	}
 }
 
 // call_term_callback invokes the termination callback with the provided reason
-func call_term_callback(trans *NIctrans, reason transaction.TERM_REASON) {
+func call_term_callback(trans *NIctrans, reason siptrans.TERM_REASON) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("termination_reason", reason).Msg("Invoking termination callback")
 	trans.term_cb(trans.id, reason)
 }

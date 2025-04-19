@@ -2,12 +2,12 @@ package core
 
 import (
 	"gossip/sipmess"
-	"gossip/transaction"
-	"gossip/transaction/ictrans"
-	"gossip/transaction/istrans"
-	"gossip/transaction/nictrans"
-	"gossip/transaction/nistrans"
-	"gossip/transport"
+	"gossip/siptrans"
+	"gossip/siptrans/ictrans"
+	"gossip/siptrans/istrans"
+	"gossip/siptrans/nictrans"
+	"gossip/siptrans/nistrans"
+	"gossip/siptransp"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -15,25 +15,25 @@ import (
 
 var (
 	mu sync.Mutex
-	m  = make(map[transaction.TransID]transaction.Transaction)
+	m  = make(map[siptrans.TransID]siptrans.Transaction)
 )
 
-func HandleMessage(msg *sipmess.SIPMessage, transport *transport.Transport) {
+func HandleMessage(msg *sipmess.SIPMessage, transport *siptransp.Transport) {
 	log.Trace().Interface("message", msg).Msg("Handle message")
 
 	mu.Lock()
-	if trans := FindTransaction(msg); trans != nil {
+	if trans := Findsiptrans(msg); trans != nil {
 		trans.Event(msg)
 		mu.Unlock()
 	} else {
 		mu.Unlock()
 		if msg.Request == nil {
-			//log.Error().Msg("Cannot start new transaction with response")
+			//log.Error().Msg("Cannot start new siptrans with response")
 			return
 		}
 
 		if msg.Request.Method == sipmess.Ack {
-			log.Debug().Msg("Cannot start new transaction with ack request...process stateless")
+			log.Debug().Msg("Cannot start new siptrans with ack request...process stateless")
 			StatelessRoute(msg, transport)
 			return
 		}
@@ -42,20 +42,20 @@ func HandleMessage(msg *sipmess.SIPMessage, transport *transport.Transport) {
 	}
 }
 
-func StartServerTransaction(
+func StartServersiptrans(
 	msg *sipmess.SIPMessage,
-	transport *transport.Transport,
-	core_cb func(*transport.Transport, *sipmess.SIPMessage),
-	tranport_cb func(*transport.Transport, *sipmess.SIPMessage) bool,
-	term_cb func(transaction.TransID, transaction.TERM_REASON),
-) transaction.Transaction {
-	tid, err := transaction.MakeServerTransactionID(msg)
+	transport *siptransp.Transport,
+	core_cb func(*siptransp.Transport, *sipmess.SIPMessage),
+	tranport_cb func(*siptransp.Transport, *sipmess.SIPMessage) bool,
+	term_cb func(siptrans.TransID, siptrans.TERM_REASON),
+) siptrans.Transaction {
+	tid, err := siptrans.MakeServerTransactionID(msg)
 	if err != nil {
-		log.Error().Msg("Cannot create transaction ID")
+		log.Error().Msg("Cannot create siptrans")
 		return nil
 	}
 
-	var trans transaction.Transaction
+	var trans siptrans.Transaction
 
 	if msg.Request.Method == sipmess.Ack {
 		trans = istrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
@@ -63,7 +63,7 @@ func StartServerTransaction(
 		trans = nistrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	}
 
-	log.Debug().Msg("Start server transaction with trans id: " + tid.String())
+	log.Debug().Msg("Start server siptrans with trans id: " + tid.String())
 
 	mu.Lock()
 	m[tid] = trans
@@ -72,21 +72,21 @@ func StartServerTransaction(
 	return trans
 }
 
-func StartClientTransaction(
+func StartClientsiptrans(
 	msg *sipmess.SIPMessage,
-	transport *transport.Transport,
-	core_cb func(*transport.Transport, *sipmess.SIPMessage),
-	tranport_cb func(*transport.Transport, *sipmess.SIPMessage) bool,
-	term_cb func(transaction.TransID, transaction.TERM_REASON),
-) transaction.Transaction {
+	transport *siptransp.Transport,
+	core_cb func(*siptransp.Transport, *sipmess.SIPMessage),
+	tranport_cb func(*siptransp.Transport, *sipmess.SIPMessage) bool,
+	term_cb func(siptrans.TransID, siptrans.TERM_REASON),
+) siptrans.Transaction {
 
-	tid, err := transaction.MakeClientTransactionID(msg)
+	tid, err := siptrans.MakeClientTransactionID(msg)
 	if err != nil {
-		log.Error().Msg("Cannot create transaction ID")
+		log.Error().Msg("Cannot create siptrans ID")
 		return nil
 	}
 
-	var trans transaction.Transaction
+	var trans siptrans.Transaction
 
 	if msg.CSeq.Method == sipmess.Invite {
 		trans = ictrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
@@ -94,7 +94,7 @@ func StartClientTransaction(
 		trans = nictrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	}
 
-	log.Debug().Msg("Start client transaction with trans id: " + tid.String())
+	log.Debug().Msg("Start client siptrans with trans id: " + tid.String())
 
 	mu.Lock()
 	m[tid] = trans
@@ -103,29 +103,29 @@ func StartClientTransaction(
 	return trans
 }
 
-func DeleteTransaction(tid transaction.TransID) {
-	log.Debug().Msg("Delete transaction with ID: " + tid.String())
+func Deletesiptrans(tid siptrans.TransID) {
+	log.Debug().Msg("Delete siptrans with ID: " + tid.String())
 	mu.Lock()
 	delete(m, tid)
 	mu.Unlock()
 }
 
-func FindTransaction(msg *sipmess.SIPMessage) transaction.Transaction {
-	var tid transaction.TransID
+func Findsiptrans(msg *sipmess.SIPMessage) siptrans.Transaction {
+	var tid siptrans.TransID
 	var err error
 	if msg.Request != nil {
-		tid, err = transaction.MakeServerTransactionID(msg)
+		tid, err = siptrans.MakeServerTransactionID(msg)
 	} else {
-		tid, err = transaction.MakeClientTransactionID(msg)
+		tid, err = siptrans.MakeClientTransactionID(msg)
 	}
 
 	if err != nil {
-		log.Error().Msg("Cannot create transaction ID")
+		log.Error().Msg("Cannot create siptrans ID")
 		return nil
 	}
 
 	if result, ok := m[tid]; ok {
-		log.Debug().Msg("Found transaction with ID: " + tid.String())
+		log.Debug().Msg("Found siptrans with ID: " + tid.String())
 		return result
 	}
 

@@ -2,8 +2,8 @@ package nistrans
 
 import (
 	"gossip/sipmess"
-	"gossip/transaction"
-	"gossip/transport"
+	"gossip/siptrans"
+	"gossip/siptransp"
 
 	"github.com/rs/zerolog/log"
 )
@@ -99,29 +99,29 @@ func (s state) String() string {
 
 // NIstrans represents the state machine for a Non-Invite Server Transaction
 type NIstrans struct {
-	id        transaction.TransID                                  // Transaction ID
+	id        siptrans.TransID                                     // Transaction ID
 	state     state                                                // Current state of the transaction
 	message   *sipmess.SIPMessage                                  // The SIP message associated with the transaction
-	transport *transport.Transport                                 // Transport layer for sending and receiving messages
+	transport *siptransp.Transport                                 // Transport layer for sending and receiving messages
 	last_res  *sipmess.SIPMessage                                  // The last response received
-	timers    [1]transaction.Timer                                 // Timer J for retransmission
+	timers    [1]siptrans.Timer                                    // Timer J for retransmission
 	transc    chan *sipmess.SIPMessage                             // Channel for receiving events like timeouts or messages
-	trpt_cb   func(*transport.Transport, *sipmess.SIPMessage) bool // Callback for transport layer
-	core_cb   func(*transport.Transport, *sipmess.SIPMessage)      // Callback for core layer
-	term_cb   func(transaction.TransID, transaction.TERM_REASON)
+	trpt_cb   func(*siptransp.Transport, *sipmess.SIPMessage) bool // Callback for transport layer
+	core_cb   func(*siptransp.Transport, *sipmess.SIPMessage)      // Callback for core layer
+	term_cb   func(siptrans.TransID, siptrans.TERM_REASON)
 }
 
 // Make creates and initializes a new NIstrans instance with the given message and callbacks
 func Make(
-	id transaction.TransID, // Transaction ID
+	id siptrans.TransID, // Transaction ID
 	msg *sipmess.SIPMessage,
-	transport *transport.Transport,
-	core_callback func(*transport.Transport, *sipmess.SIPMessage),
-	transport_callback func(*transport.Transport, *sipmess.SIPMessage) bool,
-	term_callback func(transaction.TransID, transaction.TERM_REASON),
+	transport *siptransp.Transport,
+	core_callback func(*siptransp.Transport, *sipmess.SIPMessage),
+	transport_callback func(*siptransp.Transport, *sipmess.SIPMessage) bool,
+	term_callback func(siptrans.TransID, siptrans.TERM_REASON),
 ) *NIstrans {
 	// Create new timers for the transaction state machine
-	timerJ := transaction.NewTimer() // Timer J for the Completed state
+	timerJ := siptrans.NewTimer() // Timer J for the Completed state
 
 	log.Trace().Str("transaction_id", id.String()).Interface("message", msg).Interface("transport", transport).Msg("Creating new Non-Invite server transaction")
 	// Return a new NIstrans instance with the provided parameters
@@ -130,7 +130,7 @@ func Make(
 		message:   msg, // Set the SIP message
 		transport: transport,
 		transc:    make(chan *sipmess.SIPMessage, 5), // Channel for event communication
-		timers:    [1]transaction.Timer{timerJ},      // Initialize Timer J
+		timers:    [1]siptrans.Timer{timerJ},         // Initialize Timer J
 		state:     trying,                            // Initial state is "trying"
 		trpt_cb:   transport_callback,                // Transport callback for message transmission
 		core_cb:   core_callback,                     // Core callback for message handling in the application logic
@@ -183,7 +183,7 @@ func (trans *NIstrans) handle_timer(timer timer) {
 	if timer == timer_j && trans.state == completed {
 		// Timer J expired: Transaction is terminated due to timeout
 		trans.state = terminated
-		call_term_callback(trans, transaction.NORMAL)
+		call_term_callback(trans, siptrans.NORMAL)
 	}
 }
 
@@ -229,12 +229,12 @@ func call_transport_callback(trans *NIstrans, msg *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("message", msg).Msg("Invoking transport callback")
 	if !trans.trpt_cb(trans.transport, msg) {
 		trans.state = terminated
-		call_term_callback(trans, transaction.ERROR)
+		call_term_callback(trans, siptrans.ERROR)
 	}
 }
 
 // call_term_callback invokes the termination callback with the provided reason
-func call_term_callback(trans *NIstrans, reason transaction.TERM_REASON) {
+func call_term_callback(trans *NIstrans, reason siptrans.TERM_REASON) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("termination_reason", reason).Msg("Invoking termination callback")
 	trans.term_cb(trans.id, reason)
 }
