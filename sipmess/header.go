@@ -2,7 +2,7 @@ package sipmess
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 )
 
 type SIPHeader int
@@ -188,5 +188,5 @@ func ParseHeaderName(header []byte) (SIPHeader, error) {
 	if h, ok := nameSipHeaders[string(bytes.ToLower(header))]; ok {
 		return h, nil
 	}
-	return 0, errors.New("invalid header name")
+	return 0, fmt.Errorf("unrecognized header %q", header)
 }

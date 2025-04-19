@@ -2,7 +2,7 @@ package sipmess
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"strconv"
 )
 
@@ -20,7 +20,7 @@ func ParseSipVia(via []byte) (SIPVia, error) {
 	// Find first space to separate protocol
 	spaceIndex := bytes.IndexByte(via, ' ')
 	if spaceIndex == -1 {
-		return sipVia, errors.New("invalid via header: missing protocol or domain")
+		return sipVia, fmt.Errorf("missing protocol or domain in %q", via)
 	}
 
 	sipVia.Proto = via[:spaceIndex]
@@ -47,7 +47,7 @@ func ParseSipVia(via []byte) (SIPVia, error) {
 		sipVia.Domain = domainPart[:colonIndex]
 		port, err := strconv.Atoi(string(domainPart[colonIndex+1:]))
 		if err != nil {
-			return sipVia, errors.New("invalid via header: invalid port")
+			return sipVia, fmt.Errorf("invalid port in %q: %w", domainPart[colonIndex+1:], err)
 		}
 		sipVia.Port = port
 	}

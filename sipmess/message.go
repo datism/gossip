@@ -2,7 +2,7 @@ package sipmess
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"strconv"
 )
 
@@ -76,7 +76,7 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 	// Split the message into headers and body
 	headerEnd := bytes.Index(msgRaw, []byte("\r\n\r\n"))
 	if headerEnd == -1 {
-		return nil, errors.Join(errors.New("invalid message"), errors.New("invalid_sip_message"))
+		return nil, fmt.Errorf("missing header-body separator in %q", msgRaw)
 	}
 	headersPart := msgRaw[:headerEnd]
 	bodyPart := msgRaw[headerEnd+4:]
@@ -84,7 +84,7 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 	// Parse the start line
 	lineEnd := bytes.Index(headersPart, []byte("\r\n"))
 	if lineEnd == -1 {
-		return nil, errors.Join(errors.New("invalid start line"), errors.New("invalid_sip_message"))
+		return nil, fmt.Errorf("missing start line in %q", headersPart)
 	}
 	startLine := headersPart[:lineEnd]
 	headersPart = headersPart[lineEnd+2:]
@@ -94,11 +94,11 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 		// It's a response
 		parts := bytes.Fields(startLine)
 		if len(parts) < 3 {
-			return nil, errors.Join(errors.New("invalid response start line"), errors.New("invalid_sip_message"))
+			return nil, fmt.Errorf("parsing SIP response: invalid start line %q", startLine)
 		}
 		statusCode, err := strconv.Atoi(string(parts[1]))
 		if err != nil {
-			return nil, errors.Join(err, errors.New("invalid_start_line"))
+			return nil, fmt.Errorf("parsing SIP response: invalid status code in %q: %w", parts[1], err)
 		}
 		msg.Startline.Response = &Response{
 			StatusCode:   statusCode,
@@ -108,15 +108,15 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 		// It's a request
 		parts := bytes.Fields(startLine)
 		if len(parts) < 3 {
-			return nil, errors.Join(errors.New("invalid request start line"), errors.New("invalid_sip_message"))
+			return nil, fmt.Errorf("parsing SIP request: invalid start line %q", startLine)
 		}
 		requestURI, err := ParseSipUri(parts[1])
 		if err != nil {
-			return nil, errors.Join(err, errors.New("invalid_sip_message"))
+			return nil, fmt.Errorf("parsing SIP request: invalid request URI in %q: %w", parts[1], err)
 		}
 		meth, err := ParseMethod(parts[0])
 		if err != nil {
-			return nil, errors.Join(err, errors.New("invalid_sip_message"))
+			return nil, fmt.Errorf("parsing SIP request %q: %w", parts[0], err)
 		}
 
 		msg.Startline.Request = &Request{
@@ -137,12 +137,12 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 
 		colonIndex := bytes.IndexByte(line, ':')
 		if colonIndex == -1 {
-			return nil, errors.Join(errors.New("malformed header line"), errors.New("invalid_sip_message"))
+			return nil, fmt.Errorf("parsing SIP headers: malformed header line %q", line)
 		}
 
 		headerName, err := ParseHeaderName(bytes.TrimSpace(line[:colonIndex]))
 		if err != nil {
-			return nil, errors.Join(err, errors.New("invalid_sip_message"))
+			return nil, fmt.Errorf("parsing SIP headers %q: %w", line[:colonIndex], err)
 		}
 
 		headerValueRaw := bytes.TrimSpace(line[colonIndex+1:])
@@ -161,7 +161,7 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 		if fromRaw, ok := msg.Headers[From]; ok {
 			from, err := ParseSipFromTo(fromRaw[0])
 			if err != nil {
-				return nil, errors.Join(err, errors.New("invalid_sip_message"))
+				return nil, fmt.Errorf("parsing From header: %w", err)
 			}
 			msg.From = from
 			delete(msg.Headers, From)
@@ -172,7 +172,7 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 		if toRaw, ok := msg.Headers[To]; ok {
 			to, err := ParseSipFromTo(toRaw[0])
 			if err != nil {
-				return nil, errors.Join(err, errors.New("invalid_sip_message"))
+				return nil, fmt.Errorf("parsing To header: %w", err)
 			}
 			msg.To = to
 			delete(msg.Headers, To)
@@ -191,7 +191,7 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 		if cseqRaw, ok := msg.Headers[CSeq]; ok {
 			cseq, err := ParseSipCseq(cseqRaw[0])
 			if err != nil {
-				return nil, errors.Join(err, errors.New("invalid_sip_message"))
+				return nil, fmt.Errorf("parsing CSeq header: %w", err)
 			}
 			msg.CSeq = cseq
 			delete(msg.Headers, CSeq)
@@ -203,7 +203,7 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 			for _, contactRaw := range contactsRaw {
 				contact, err := ParseSipContact(contactRaw)
 				if err != nil {
-					return nil, errors.Join(err, errors.New("invalid_sip_message"))
+					return nil, fmt.Errorf("parsing Contact header: %w", err)
 				}
 				msg.Contacts = append(msg.Contacts, contact)
 			}
@@ -215,7 +215,7 @@ func ParseSipMessage(msgRaw []byte, option ParseOptions) (*SIPMessage, error) {
 		if viaRaw, ok := msg.Headers[Via]; ok {
 			topmostVia, err := ParseSipVia(viaRaw[0])
 			if err != nil {
-				return nil, errors.Join(err, errors.New("invalid_sip_message"))
+				return nil, fmt.Errorf("parsing Via header: %w", err)
 			}
 			msg.TopmostVia = topmostVia
 			msg.Headers[Via] = viaRaw[1:]

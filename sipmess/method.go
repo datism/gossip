@@ -2,7 +2,7 @@ package sipmess
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 )
 
 // SIPMethod represents a SIP request method.
@@ -70,5 +70,5 @@ func ParseMethod(method []byte) (SIPMethod, error) {
 	if m, ok := nameSipMethods[string(bytes.ToUpper(method))]; ok {
 		return m, nil
 	}
-	return -1, errors.New("invalid SIP method")
+	return -1, fmt.Errorf("invalid SIP method %q", method)
 }

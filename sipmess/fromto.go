@@ -2,7 +2,7 @@ package sipmess
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 )
 
 type SIPFromTo struct {
@@ -17,8 +17,8 @@ func ParseSipFromTo(input []byte) (SIPFromTo, error) {
 	// Find parameters (starts with ';')
 	semiIndex := bytes.IndexByte(input, ';')
 	if semiIndex != -1 {
-		fromTo.Paras = input[semiIndex+1:]
-		input = input[:semiIndex] // Keep only the URI part for parsing
+			fromTo.Paras = input[semiIndex+1:]
+			input = input[:semiIndex] // Keep only the URI part for parsing
 	}
 
 	// Extract and parse the SIP URI (URI is enclosed in "< >")
@@ -26,36 +26,36 @@ func ParseSipFromTo(input []byte) (SIPFromTo, error) {
 	end := bytes.IndexByte(input, '>')
 
 	if start != -1 && end != -1 && start < end {
-		// Extract URI inside "< >"
-		sipUri, err := ParseSipUri(input[start+1 : end])
-		if err != nil {
-			return fromTo, errors.Join(err, errors.New("invalid from to header"))
-		}
-		fromTo.Uri = sipUri
+			// Extract URI inside "< >"
+			sipUri, err := ParseSipUri(input[start+1 : end])
+			if err != nil {
+					return fromTo, fmt.Errorf("parsing SIP URI in From/To header %q: %w", input[start+1:end], err)
+			}
+			fromTo.Uri = sipUri
 	} else {
-		// If no "< >", assume raw URI
-		sipUri, err := ParseSipUri(input)
-		if err != nil {
-			return fromTo, errors.Join(err, errors.New("invalid from to header"))
-		}
-		fromTo.Uri = sipUri
+			// If no "< >", assume raw URI
+			sipUri, err := ParseSipUri(input)
+			if err != nil {
+					return fromTo, fmt.Errorf("parsing raw SIP URI in From/To header %q: %w", input, err)
+			}
+			fromTo.Uri = sipUri
 	}
 
 	// Extract tag if present
 	tagIndex := bytes.Index(fromTo.Paras, []byte("tag="))
 	if tagIndex != -1 {
-		endIndex := bytes.IndexByte(fromTo.Paras[tagIndex+4:], ';')
-		if endIndex == -1 {
-			fromTo.Tag = fromTo.Paras[tagIndex+4:]
-			fromTo.Paras = fromTo.Paras[:tagIndex]
-		} else {
-			fromTo.Tag = fromTo.Paras[tagIndex+4 : tagIndex+4+endIndex]
-			fromTo.Paras = append(fromTo.Paras[:tagIndex], fromTo.Paras[tagIndex+4+endIndex:]...)
-		}
+			endIndex := bytes.IndexByte(fromTo.Paras[tagIndex+4:], ';')
+			if endIndex == -1 {
+					fromTo.Tag = fromTo.Paras[tagIndex+4:]
+					fromTo.Paras = fromTo.Paras[:tagIndex]
+			} else {
+					fromTo.Tag = fromTo.Paras[tagIndex+4 : tagIndex+4+endIndex]
+					fromTo.Paras = append(fromTo.Paras[:tagIndex], fromTo.Paras[tagIndex+4+endIndex:]...)
+			}
 	}
 
 	if len(fromTo.Paras) == 0 {
-		fromTo.Paras = nil
+			fromTo.Paras = nil
 	}
 
 	return fromTo, nil
@@ -67,10 +67,10 @@ func (ft SIPFromTo) Serialize() []byte {
 
 	size := len(uri) + 2 // "< >"
 	if ft.Tag != nil {
-		size += 5 + len(ft.Tag) // ";tag="
+			size += 5 + len(ft.Tag) // ";tag="
 	}
 	if ft.Paras != nil {
-		size += 1 + len(ft.Paras) // ";"
+			size += 1 + len(ft.Paras) // ";"
 	}
 
 	// Preallocate slice
@@ -83,14 +83,14 @@ func (ft SIPFromTo) Serialize() []byte {
 
 	// Append tag if present
 	if ft.Tag != nil {
-		buffer = append(buffer, ";tag="...)
-		buffer = append(buffer, ft.Tag...)
+			buffer = append(buffer, ";tag="...)
+			buffer = append(buffer, ft.Tag...)
 	}
 
 	// Append parameters if present
 	if ft.Paras != nil {
-		buffer = append(buffer, ';')
-		buffer = append(buffer, ft.Paras...)
+			buffer = append(buffer, ';')
+			buffer = append(buffer, ft.Paras...)
 	}
 
 	return buffer
