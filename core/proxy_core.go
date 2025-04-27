@@ -52,7 +52,7 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 		} else {
 			log.Debug().Str("siptrans_id", id.String()).Msg("siptrans terminated normally")
 		}
-		Deletesiptrans(id)
+		DeleteTrans(id)
 	}
 
 	ctrans_term_cb := func(id siptrans.TransID, reason siptrans.TERM_REASON) {
@@ -62,10 +62,10 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 		} else {
 			log.Debug().Str("siptrans_id", id.String()).Msg("siptrans terminated normally")
 		}
-		Deletesiptrans(id)
+		DeleteTrans(id)
 	}
 
-	server_trans := StartServersiptrans(request, transp, strans_core_cb, trpt_cb, strans_term_cb)
+	server_trans := StartServerTrans(request, transp, strans_core_cb, trpt_cb, strans_term_cb)
 
 	request = <-strans_chan
 
@@ -89,7 +89,7 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 		Branch: randSeq(5),
 	})
 
-	StartClientsiptrans(request, dest_transp, ctrans_core_cb, trpt_cb, ctrans_term_cb)
+	StartClientTrans(request, dest_transp, ctrans_core_cb, trpt_cb, ctrans_term_cb)
 
 	for {
 		select {

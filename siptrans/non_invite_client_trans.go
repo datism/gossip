@@ -1,8 +1,7 @@
-package nictrans
+package siptrans
 
 import (
 	"gossip/sipmess"
-	"gossip/siptrans"
 	"gossip/siptransp"
 
 	"github.com/rs/zerolog/log"
@@ -51,146 +50,107 @@ import (
    to take
 */
 
-// Timer constants
-const (
-	t1      = 500     // Timer T1 duration (500ms)
-	t2      = 4000    // Timer T2 duration (4000ms)
-	t4      = 5000    // Timer T4 duration (5000ms)
-	tif_dur = 64 * t1 // Timer F duration (64*T1)
-	tie_dur = t1
-	tik_dur = t4
-)
-
-type timer int
-
-// Timer constants (Indexes)
-const (
-	timer_e = iota
-	timer_f
-	timer_k
-)
-
-func (t timer) String() string {
-	switch t {
-	case timer_e:
-		return "Timer E"
-	case timer_f:
-		return "Timer F"
-	case timer_k:
-		return "Timer K"
-	default:
-		return "Unknown"
-	}
-}
-
-// Define the states for the Non-Invite Client Transaction
-type state int
-
-const (
-	trying     state = iota // The transaction is waiting for a response
-	proceeding              // The transaction has received a provisional response
-	completed               // The transaction has received a final response
-	terminated              // The transaction has been terminated
-)
-
 // NIctrans represents the state machine for a Non-Invite Client Transaction
 type NIctrans struct {
-	id        siptrans.TransID                                     // Transaction ID
+	id        TransID                                              // Transaction ID
 	state     state                                                // Current state of the transaction
 	message   *sipmess.SIPMessage                                  // The SIP message associated with the transaction
 	transport *siptransp.Transport                                 // Transport layer for sending and receiving messages
-	timers    [3]siptrans.Timer                                    // Timers used for retransmission and timeout
+	timerE    *transTimer                                          // Timer E for retransmissions
+	timerF    *transTimer                                          // Timer F for transaction timeout
+	timerK    *transTimer                                          // Timer K for termination after completion
 	transc    chan *sipmess.SIPMessage                             // Channel for receiving events like timeouts or messages
 	trpt_cb   func(*siptransp.Transport, *sipmess.SIPMessage) bool // Callback for transport layer
 	core_cb   func(*siptransp.Transport, *sipmess.SIPMessage)      // Callback for core layer
-	term_cb   func(siptrans.TransID, siptrans.TERM_REASON)
+	term_cb   func(TransID, TERM_REASON)                           // Termination callback
 }
 
 // Make creates and initializes a new NIctrans instance with the given message and callbacks
-func Make(
-	id siptrans.TransID, // Transaction ID
+func MakeNICT(
+	id TransID,
 	msg *sipmess.SIPMessage,
 	transport *siptransp.Transport,
 	core_callback func(*siptransp.Transport, *sipmess.SIPMessage),
 	transport_callback func(*siptransp.Transport, *sipmess.SIPMessage) bool,
-	term_callback func(siptrans.TransID, siptrans.TERM_REASON),
+	term_callback func(TransID, TERM_REASON),
 ) *NIctrans {
-	// Create new timers for the transaction state machine
-	timerE := siptrans.NewTimer() // Retransmission Timer
-	timerF := siptrans.NewTimer() // Timeout Timer
-	timerK := siptrans.NewTimer() // Timer for completed state
-
 	log.Trace().Str("transaction_id", id.String()).Interface("message", msg).Interface("transport", transport).Msg("Creating new Non-Invite client transaction")
-	// Return a new NIctrans instance with the provided parameters
 	return &NIctrans{
-		id:        id, // Set transaction ID
+		id:        id,
 		message:   msg,
 		transport: transport,
-		transc:    make(chan *sipmess.SIPMessage, 5),         // Channel for event communication
-		timers:    [3]siptrans.Timer{timerE, timerF, timerK}, // Initialize the timers array
-		state:     trying,                                    // Initial state is "trying"
-		trpt_cb:   transport_callback,                        // Transport callback for message transmission
-		core_cb:   core_callback,                             // Core callback for message handling in the application logic
-		term_cb:   term_callback,                             // Termination callback for the transaction
+		transc:    make(chan *sipmess.SIPMessage, 5),
+		timerE:    newTransTimer("Timer E"),
+		timerF:    newTransTimer("Timer F"),
+		timerK:    newTransTimer("Timer K"),
+		state:     trying,
+		trpt_cb:   transport_callback,
+		core_cb:   core_callback,
+		term_cb:   term_callback,
 	}
 }
 
-// Event is used to send events to the transaction, which are handled in the start() method
-func (trans NIctrans) Event(msg *sipmess.SIPMessage) {
+// Event is used to send events to the transaction, which are handled in the Start() method
+func (trans *NIctrans) Event(msg *sipmess.SIPMessage) {
 	if trans.state == terminated {
 		return
 	}
 
-	trans.transc <- msg // Push the event to the transc channel for processing
+	trans.transc <- msg
 }
 
-// Start initiates the transaction processing by running the start method in a goroutine
+// Start initiates the transaction processing by running the main event loop
 func (trans *NIctrans) Start() {
 	log.Trace().Str("transaction_id", trans.id.String()).Msg("Starting Non-Invite client transaction")
 	// Start Timer F (64*T1)
-	trans.timers[timer_f].Start(tif_dur)
+	trans.timerF.start(tif_dur)
 
 	// Send the request to the transport layer
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("message", trans.message).Msg("Initial action: Sending request")
-	call_transport_callback(trans, trans.message)
+	trans.call_transport_callback(trans.message)
 
 	// Set Timer E for retransmission to fire at T1
-	trans.timers[timer_e].Start(tie_dur)
+	trans.timerE.start(tie_dur)
 
 	for {
-		// Wait for events (e.g., timeouts, received messages)
 		select {
 		case msg := <-trans.transc:
 			trans.handle_message(msg)
-		case <-trans.timers[timer_e].Chan(): // Timer E expires
-			trans.handle_timer(timer_e)
-		case <-trans.timers[timer_f].Chan(): // Timer F expires
-			trans.handle_timer(timer_f)
-		case <-trans.timers[timer_k].Chan(): // Timer K expires
-			trans.handle_timer(timer_k)
+		case <-trans.timerE.Timer.C:
+			trans.handle_timer(trans.timerE)
+		case <-trans.timerF.Timer.C:
+			trans.handle_timer(trans.timerF)
+		case <-trans.timerK.Timer.C:
+			trans.handle_timer(trans.timerK)
 		}
 
-		// If the state is terminated, exit the loop
 		if trans.state == terminated {
 			log.Trace().Str("transaction_id", trans.id.String()).Msg("Transaction terminated")
-			close(trans.transc) // Close the event channel when the transaction ends
+			close(trans.transc)
 			break
 		}
 	}
 }
 
-// handle_timeout processes timeout events (Timer E, F, K)
-func (trans *NIctrans) handle_timer(timer timer) {
-	log.Trace().Str("transaction_id", trans.id.String()).Str("timer", timer.String()).Msg("Handling timer event")
-	if timer == timer_f && trans.state < completed { // Timer F expired, inform TU of timeout and terminate transaction
-		trans.state = terminated
-		call_term_callback(trans, siptrans.TIMEOUT)
-	} else if timer == timer_e && trans.state < completed { // Timer E expired in trying, proceeding state, retransmit request
-		trans.timers[timer_e].Start(min(trans.timers[timer_e].Duration()*2, t2)) // Double Timer E duration
-		call_transport_callback(trans, trans.message)
-	} else if timer == timer_k && trans.state == completed { // Timer D expired in completed state, terminate transaction
-		trans.state = terminated
-		call_term_callback(trans, siptrans.NORMAL)
+// handle_timer processes timeout events (Timer E, F, K)
+func (trans *NIctrans) handle_timer(timer *transTimer) {
+	log.Trace().Str("transaction_id", trans.id.String()).Str("timer", timer.ID).Msg("Handling timer event")
+	switch timer {
+	case trans.timerF:
+		if trans.state < completed {
+			trans.state = terminated
+			trans.call_term_callback(TIMEOUT)
+		}
+	case trans.timerE:
+		if trans.state < completed {
+			trans.timerE.start(min(trans.timerE.Duration*2, t2))
+			trans.call_transport_callback(trans.message)
+		}
+	case trans.timerK:
+		if trans.state == completed {
+			trans.state = terminated
+			trans.call_term_callback(NORMAL)
+		}
 	}
 }
 
@@ -203,34 +163,32 @@ func (trans *NIctrans) handle_message(msg *sipmess.SIPMessage) {
 
 	status_code := msg.Response.StatusCode
 	if status_code >= 100 && status_code < 200 {
-		// Provisional response (1xx): Move to Proceeding state
 		trans.state = proceeding
-		call_core_callback(trans, msg)
+		trans.call_core_callback(msg)
 	} else if status_code >= 200 && status_code <= 699 {
-		// Final response (2xx-6xx): Move to Completed state
-		trans.timers[timer_k].Start(tik_dur)
+		trans.timerK.start(tik_dur)
 		trans.state = completed
-		call_core_callback(trans, msg)
+		trans.call_core_callback(msg)
 	}
 }
 
 // call_core_callback invokes the core callback with the provided event
-func call_core_callback(trans *NIctrans, msg *sipmess.SIPMessage) {
+func (trans *NIctrans) call_core_callback(msg *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("message", msg).Msg("Invoking core callback")
 	trans.core_cb(trans.transport, msg)
 }
 
 // call_transport_callback invokes the transport callback with the provided event
-func call_transport_callback(trans *NIctrans, msg *sipmess.SIPMessage) {
+func (trans *NIctrans) call_transport_callback(msg *sipmess.SIPMessage) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("message", msg).Msg("Invoking transport callback")
 	if !trans.trpt_cb(trans.transport, msg) {
 		trans.state = terminated
-		call_term_callback(trans, siptrans.ERROR)
+		trans.call_term_callback(ERROR)
 	}
 }
 
 // call_term_callback invokes the termination callback with the provided reason
-func call_term_callback(trans *NIctrans, reason siptrans.TERM_REASON) {
+func (trans *NIctrans) call_term_callback(reason TERM_REASON) {
 	log.Trace().Str("transaction_id", trans.id.String()).Interface("termination_reason", reason).Msg("Invoking termination callback")
 	trans.term_cb(trans.id, reason)
 }

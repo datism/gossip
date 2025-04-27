@@ -3,10 +3,6 @@ package core
 import (
 	"gossip/sipmess"
 	"gossip/siptrans"
-	"gossip/siptrans/ictrans"
-	"gossip/siptrans/istrans"
-	"gossip/siptrans/nictrans"
-	"gossip/siptrans/nistrans"
 	"gossip/siptransp"
 	"sync"
 
@@ -22,7 +18,7 @@ func HandleMessage(msg *sipmess.SIPMessage, transport *siptransp.Transport) {
 	log.Trace().Interface("message", msg).Msg("Handle message")
 
 	mu.Lock()
-	if trans := Findsiptrans(msg); trans != nil {
+	if trans := FindTrans(msg); trans != nil {
 		trans.Event(msg)
 		mu.Unlock()
 	} else {
@@ -42,7 +38,7 @@ func HandleMessage(msg *sipmess.SIPMessage, transport *siptransp.Transport) {
 	}
 }
 
-func StartServersiptrans(
+func StartServerTrans(
 	msg *sipmess.SIPMessage,
 	transport *siptransp.Transport,
 	core_cb func(*siptransp.Transport, *sipmess.SIPMessage),
@@ -57,10 +53,10 @@ func StartServersiptrans(
 
 	var trans siptrans.Transaction
 
-	if msg.Request.Method == sipmess.Ack {
-		trans = istrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
+	if msg.Request.Method == sipmess.Invite {
+		trans = siptrans.MakeSIT(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	} else {
-		trans = nistrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
+		trans = siptrans.MakeNIST(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	}
 
 	log.Debug().Msg("Start server siptrans with trans id: " + tid.String())
@@ -72,7 +68,7 @@ func StartServersiptrans(
 	return trans
 }
 
-func StartClientsiptrans(
+func StartClientTrans(
 	msg *sipmess.SIPMessage,
 	transport *siptransp.Transport,
 	core_cb func(*siptransp.Transport, *sipmess.SIPMessage),
@@ -89,9 +85,9 @@ func StartClientsiptrans(
 	var trans siptrans.Transaction
 
 	if msg.CSeq.Method == sipmess.Invite {
-		trans = ictrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
+		trans = siptrans.MakeICT(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	} else {
-		trans = nictrans.Make(tid, msg, transport, core_cb, tranport_cb, term_cb)
+		trans = siptrans.MakeNICT(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	}
 
 	log.Debug().Msg("Start client siptrans with trans id: " + tid.String())
@@ -103,14 +99,14 @@ func StartClientsiptrans(
 	return trans
 }
 
-func Deletesiptrans(tid siptrans.TransID) {
+func DeleteTrans(tid siptrans.TransID) {
 	log.Debug().Msg("Delete siptrans with ID: " + tid.String())
 	mu.Lock()
 	delete(m, tid)
 	mu.Unlock()
 }
 
-func Findsiptrans(msg *sipmess.SIPMessage) siptrans.Transaction {
+func FindTrans(msg *sipmess.SIPMessage) siptrans.Transaction {
 	var tid siptrans.TransID
 	var err error
 	if msg.Request != nil {

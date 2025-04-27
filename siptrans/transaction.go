@@ -14,6 +14,17 @@ const (
 	NON_INVITE_SERVER
 )
 
+type state int
+
+const (
+	trying state = iota
+	calling
+	proceeding
+	completed
+	confirmed
+	terminated
+)
+
 type TERM_REASON int
 
 func (t TERM_REASON) String() string {
