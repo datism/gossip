@@ -103,16 +103,11 @@ func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
 		return
 	}
 
-	udpAddr, ok := conn.LocalAddr().(*net.UDPAddr)
-	if !ok {
-		log.Error().Msg("Error asserting local address to UDPAddr")
-	}
-
 	transport := &siptransp.Transport{
-		Protocol:   "UDP",
+		Protocol:   "udp",
 		Conn:       conn,
-		LocalAddr:  udpAddr,
-		RemoteAddr: clientAddr,
+		LocalAddr:  conn.LocalAddr().String(),
+		RemoteAddr: clientAddr.String(),
 	}
 	core.HandleMessage(msg, transport)
 }

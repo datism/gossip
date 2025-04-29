@@ -32,13 +32,26 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 	trpt_cb := func(transport *siptransp.Transport, msg *sipmess.SIPMessage) bool {
 		bin := msg.Serialize()
 		if bin == nil {
-			//serialize error
+			//serialize
+			log.Error().Msg("Error serialize sip message")
 			return false
 		}
 
-		_, err := transport.Conn.WriteToUDP(bin, transport.RemoteAddr)
+		udpConn, ok := transport.Conn.(*net.UDPConn)
+		if !ok {
+			log.Error().Msg("Error transport type")
+			return false
+		}
+
+		daddr, err := net.ResolveUDPAddr("udp", transport.RemoteAddr)
 		if err != nil {
-			//error transport error
+			log.Error().Err(err).Msg("Failed to resolve UDP address")
+			return false
+		}
+
+		_, err = udpConn.WriteTo(bin, daddr)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to write to UDP connection")
 			return false
 		}
 
@@ -70,23 +83,19 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 	request = <-strans_chan
 
 	to_uri := request.To.Uri
-	address := net.JoinHostPort(string(to_uri.Domain), strconv.Itoa(to_uri.Port))
-	dest_addr, err := net.ResolveUDPAddr("udp", address)
-	if err != nil {
-		return
-	}
+	dest := net.JoinHostPort(string(to_uri.Domain), strconv.Itoa(to_uri.Port))
 	dest_transp := &siptransp.Transport{
-		Protocol:   "UDP",
+		Protocol:   "udp",
 		Conn:       transp.Conn,
 		LocalAddr:  transp.LocalAddr,
-		RemoteAddr: dest_addr,
+		RemoteAddr: dest,
 	}
 
 	request.AddVia(sipmess.SIPVia{
-		Proto:  []byte("UDP"),
-		Domain: []byte(dest_transp.LocalAddr.IP.String()),
-		Port:   dest_transp.LocalAddr.Port,
-		Branch: randSeq(5),
+		Tranport: "udp",
+		Domain:   []byte(to_uri.Domain),
+		Port:     to_uri.Port,
+		Branch:   randSeq(5),
 	})
 
 	StartClientTrans(request, dest_transp, ctrans_core_cb, trpt_cb, ctrans_term_cb)
@@ -122,16 +131,16 @@ func StatelessRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 	}
 
 	to_uri := request.To.Uri
-	address := net.JoinHostPort(string(to_uri.Domain), strconv.Itoa(to_uri.Port))
-	DestAddr, err := net.ResolveUDPAddr("udp", address)
+	dest := net.JoinHostPort(string(to_uri.Domain), strconv.Itoa(to_uri.Port))
+	daddr, err := net.ResolveUDPAddr("udp", dest)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to resolve UDP address")
 		return
 	}
-	DestTransport := siptransp.Transport{
-		Protocol:   "UDP",
-		Conn:       transp.Conn,
-		LocalAddr:  transp.LocalAddr,
-		RemoteAddr: DestAddr,
+	conn, err := net.DialUDP("udp", nil, daddr)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to dial UDP address")
+		return
 	}
 
 	bin := request.Serialize()
@@ -140,9 +149,10 @@ func StatelessRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 		return
 	}
 
-	_, err = DestTransport.Conn.WriteToUDP(bin, DestTransport.RemoteAddr)
+	_, err = conn.Write(bin)
 	if err != nil {
-		log.Error().Msg("Transport error")
+		log.Error().Err(err).Msg("Failed to write to UDP connection")
+		return
 	}
 }
 

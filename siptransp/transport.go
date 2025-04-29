@@ -5,8 +5,8 @@ import (
 )
 
 type Transport struct {
+	Conn       net.Conn
 	Protocol   string
-	Conn       *net.UDPConn
-	LocalAddr  *net.UDPAddr
-	RemoteAddr *net.UDPAddr
+	LocalAddr  string
+	RemoteAddr string
 }

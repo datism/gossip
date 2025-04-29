@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type SIPVia struct {
-	Proto  []byte
-	Domain []byte
-	Port   int
-	Branch []byte
-	Opts   []byte
+	Tranport string
+	Domain   []byte
+	Port     int
+	Branch   []byte
+	Opts     []byte
 }
 
 func ParseSipVia(via []byte) (SIPVia, error) {
@@ -23,7 +24,14 @@ func ParseSipVia(via []byte) (SIPVia, error) {
 		return sipVia, fmt.Errorf("missing protocol or domain in %q", via)
 	}
 
-	sipVia.Proto = via[:spaceIndex]
+	proto := string(via[:spaceIndex])
+	// Extract transport from protocol (e.g., "SIP/2.0/UDP")
+	protoParts := bytes.Split([]byte(proto), []byte("/"))
+	if len(protoParts) < 3 {
+		return sipVia, fmt.Errorf("invalid protocol format in %q", proto)
+	}
+	sipVia.Tranport = strings.ToLower(string(protoParts[2]))
+
 	rest := via[spaceIndex+1:] // Remaining part
 
 	// Find first semicolon to split domain and options
@@ -77,7 +85,7 @@ func ParseSipVia(via []byte) (SIPVia, error) {
 
 func (via SIPVia) Serialize() []byte {
 	// Calculate the size of the buffer
-	size := len(via.Proto) + 1 + len(via.Domain)
+	size := 8 + len(via.Tranport) + 1 + len(via.Domain)
 	if via.Port != -1 {
 		size += 1 + 5 // 1 for ":" and up to 5 digits for the port
 	}
@@ -90,7 +98,8 @@ func (via SIPVia) Serialize() []byte {
 
 	buffer := make([]byte, 0, size)
 	// Serialize protocol
-	buffer = append(buffer, via.Proto...)
+	buffer = append(buffer, "SIP/2.0/"...)
+	buffer = append(buffer, []byte(strings.ToUpper(via.Tranport))...)
 	buffer = append(buffer, ' ')
 	// Serialize domain
 	buffer = append(buffer, via.Domain...)

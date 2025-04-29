@@ -35,10 +35,10 @@ func TestParseSIPMessage(t *testing.T) {
 					},
 				},
 				TopmostVia: sipmess.SIPVia{
-					Proto:  []byte("SIP/2.0/UDP"),
-					Domain: []byte("192.168.1.1"),
-					Port:   5060,
-					Branch: []byte("z9hG4bK776asdhds"),
+					Tranport: "udp",
+					Domain:   []byte("192.168.1.1"),
+					Port:     5060,
+					Branch:   []byte("z9hG4bK776asdhds"),
 				},
 				From: sipmess.SIPFromTo{
 					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("example.com"), Port: -1},
@@ -92,10 +92,10 @@ func TestParseSIPMessage(t *testing.T) {
 					},
 				},
 				TopmostVia: sipmess.SIPVia{
-					Proto:  []byte("SIP/2.0/UDP"),
-					Domain: []byte("192.168.1.1"),
-					Port:   5060,
-					Branch: []byte("z9hG4bK776asdhds"),
+					Tranport: "udp",
+					Domain:   []byte("192.168.1.1"),
+					Port:     5060,
+					Branch:   []byte("z9hG4bK776asdhds"),
 				},
 				From: sipmess.SIPFromTo{
 					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("example.com"), Port: -1},
