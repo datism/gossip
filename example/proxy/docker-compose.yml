@@ -1,14 +1,12 @@
-version: "2.4"
-
 services:
   proxy:
     image: golang:latest
     command: go run . -addr=10.4.0.20:5060
     # stdin_open: true
     # command: bash
-    working_dir: /usr/src/gossip/
+    working_dir: /usr/src/proxy/
     volumes:
-      - ../..//gossip:/usr/src/gossip
+      - ../proxy:/usr/src/proxy
 
     cpus: 4.0
     cpuset: "0,1,2,3"
