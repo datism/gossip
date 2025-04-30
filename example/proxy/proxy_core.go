@@ -1,13 +1,11 @@
-package proxy
+package main
 
 import (
-	"gossip/sipmess"
-	"gossip/siptrans"
-	"gossip/siptransp"
 	"math/rand"
 	"net"
 	"strconv"
 
+	"github.com/datism/sip"
 	"github.com/rs/zerolog/log"
 )
 
@@ -17,19 +15,19 @@ func GetMapSize() int {
 	return len(m)
 }
 
-func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
-	strans_chan := make(chan *sipmess.SIPMessage, 3)
-	ctrans_chan := make(chan *sipmess.SIPMessage, 3)
+func StatefullRoute(request *sip.SIPMessage, transp *sip.SIPTransport) {
+	strans_chan := make(chan *sip.SIPMessage, 3)
+	ctrans_chan := make(chan *sip.SIPMessage, 3)
 
-	strans_core_cb := func(transport *siptransp.Transport, message *sipmess.SIPMessage) {
+	strans_core_cb := func(transport *sip.SIPTransport, message *sip.SIPMessage) {
 		strans_chan <- message
 	}
 
-	ctrans_core_cb := func(transport *siptransp.Transport, message *sipmess.SIPMessage) {
+	ctrans_core_cb := func(transport *sip.SIPTransport, message *sip.SIPMessage) {
 		ctrans_chan <- message
 	}
 
-	trpt_cb := func(transport *siptransp.Transport, msg *sipmess.SIPMessage) bool {
+	trpt_cb := func(transport *sip.SIPTransport, msg *sip.SIPMessage) bool {
 		bin := msg.Serialize()
 		if bin == nil {
 			//serialize
@@ -58,22 +56,22 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 		return true
 	}
 
-	strans_term_cb := func(id siptrans.TransID, reason siptrans.TERM_REASON) {
-		if reason != siptrans.NORMAL {
-			log.Error().Str("siptrans_id", id.String()).Msg("siptrans terminated with error " + reason.String())
+	strans_term_cb := func(id sip.TransID, reason sip.TERM_REASON) {
+		if reason != sip.NORMAL {
+			log.Error().Str("siptrans_id", id.String()).Msg("sip terminated with error " + reason.String())
 			strans_chan <- nil
 		} else {
-			log.Debug().Str("siptrans_id", id.String()).Msg("siptrans terminated normally")
+			log.Debug().Str("siptrans_id", id.String()).Msg("sip terminated normally")
 		}
 		DeleteTrans(id)
 	}
 
-	ctrans_term_cb := func(id siptrans.TransID, reason siptrans.TERM_REASON) {
-		if reason != siptrans.NORMAL {
-			log.Error().Str("siptrans_id", id.String()).Msg("siptrans terminated with error " + reason.String())
+	ctrans_term_cb := func(id sip.TransID, reason sip.TERM_REASON) {
+		if reason != sip.NORMAL {
+			log.Error().Str("siptrans_id", id.String()).Msg("sip terminated with error " + reason.String())
 			ctrans_chan <- nil
 		} else {
-			log.Debug().Str("siptrans_id", id.String()).Msg("siptrans terminated normally")
+			log.Debug().Str("siptrans_id", id.String()).Msg("sip terminated normally")
 		}
 		DeleteTrans(id)
 	}
@@ -84,14 +82,14 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 
 	to_uri := request.To.Uri
 	dest := net.JoinHostPort(string(to_uri.Domain), strconv.Itoa(to_uri.Port))
-	dest_transp := &siptransp.Transport{
+	dest_transp := &sip.SIPTransport{
 		Protocol:   "udp",
 		Conn:       transp.Conn,
 		LocalAddr:  transp.LocalAddr,
 		RemoteAddr: dest,
 	}
 
-	request.AddVia(sipmess.SIPVia{
+	request.AddVia(sip.SIPVia{
 		Tranport: "udp",
 		Domain:   []byte(to_uri.Domain),
 		Port:     to_uri.Port,
@@ -108,11 +106,11 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 			}
 		case response := <-ctrans_chan:
 			if response == nil {
-				log.Error().Msg("Error in client siptrans")
+				log.Error().Msg("Error in client sip")
 				return
 			}
 
-			log.Debug().Msg("Forward response to server siptrans")
+			log.Debug().Msg("Forward response to server sip")
 
 			response.DeleteVia()
 			server_trans.Event(response)
@@ -125,7 +123,7 @@ func StatefullRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
 	}
 }
 
-func StatelessRoute(request *sipmess.SIPMessage, transp *siptransp.Transport) {
+func StatelessRoute(request *sip.SIPMessage, transp *sip.SIPTransport) {
 	if request.Request == nil {
 		return
 	}
