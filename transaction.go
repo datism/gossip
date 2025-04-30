@@ -52,7 +52,7 @@ func (tid TransID) String() string {
 }
 
 type SIPTransaction interface {
-	Event(SIPMessage)
+	Event(*SIPMessage)
 	Start()
 }
 

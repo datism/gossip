@@ -3,15 +3,16 @@ package proxy
 import (
 	"sync"
 
+	"github.com/datism/sip"
 	"github.com/rs/zerolog/log"
 )
 
 var (
 	mu sync.Mutex
-	m  = make(map[siptrans.TransID]siptrans.Transaction)
+	m  = make(map[sip.TransID]sip.SIPTransaction)
 )
 
-func HandleMessage(msg *sipmess.SIPMessage, transport *siptransp.Transport) {
+func HandleMessage(msg *sip.SIPMessage, transport *sip.SIPTransport) {
 	log.Trace().Interface("message", msg).Msg("Handle message")
 
 	mu.Lock()
@@ -21,12 +22,12 @@ func HandleMessage(msg *sipmess.SIPMessage, transport *siptransp.Transport) {
 	} else {
 		mu.Unlock()
 		if msg.Request == nil {
-			//log.Error().Msg("Cannot start new siptrans with response")
+			//log.Error().Msg("Cannot start new sip with response")
 			return
 		}
 
-		if msg.Request.Method == sipmess.Ack {
-			log.Debug().Msg("Cannot start new siptrans with ack request...process stateless")
+		if msg.Request.Method == sip.Ack {
+			log.Debug().Msg("Cannot start new sip with ack request...process stateless")
 			StatelessRoute(msg, transport)
 			return
 		}
@@ -36,27 +37,27 @@ func HandleMessage(msg *sipmess.SIPMessage, transport *siptransp.Transport) {
 }
 
 func StartServerTrans(
-	msg *sipmess.SIPMessage,
-	transport *siptransp.Transport,
-	core_cb func(*siptransp.Transport, *sipmess.SIPMessage),
-	tranport_cb func(*siptransp.Transport, *sipmess.SIPMessage) bool,
-	term_cb func(siptrans.TransID, siptrans.TERM_REASON),
-) siptrans.Transaction {
-	tid, err := siptrans.MakeServerTransactionID(msg)
+	msg *sip.SIPMessage,
+	transport *sip.SIPTransport,
+	core_cb func(*sip.SIPTransport, *sip.SIPMessage),
+	tranport_cb func(*sip.SIPTransport, *sip.SIPMessage) bool,
+	term_cb func(sip.TransID, sip.TERM_REASON),
+) sip.SIPTransaction {
+	tid, err := sip.MakeServerTransactionID(msg)
 	if err != nil {
-		log.Error().Msg("Cannot create siptrans")
+		log.Error().Msg("Cannot create sip")
 		return nil
 	}
 
-	var trans siptrans.Transaction
+	var trans sip.SIPTransaction
 
-	if msg.Request.Method == sipmess.Invite {
-		trans = siptrans.MakeSIT(tid, msg, transport, core_cb, tranport_cb, term_cb)
+	if msg.Request.Method == sip.Invite {
+		trans = sip.MakeIST(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	} else {
-		trans = siptrans.MakeNIST(tid, msg, transport, core_cb, tranport_cb, term_cb)
+		trans = sip.MakeNIST(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	}
 
-	log.Debug().Msg("Start server siptrans with trans id: " + tid.String())
+	log.Debug().Msg("Start server sip with trans id: " + tid.String())
 
 	mu.Lock()
 	m[tid] = trans
@@ -66,28 +67,28 @@ func StartServerTrans(
 }
 
 func StartClientTrans(
-	msg *sipmess.SIPMessage,
-	transport *siptransp.Transport,
-	core_cb func(*siptransp.Transport, *sipmess.SIPMessage),
-	tranport_cb func(*siptransp.Transport, *sipmess.SIPMessage) bool,
-	term_cb func(siptrans.TransID, siptrans.TERM_REASON),
-) siptrans.Transaction {
+	msg *sip.SIPMessage,
+	transport *sip.SIPTransport,
+	core_cb func(*sip.SIPTransport, *sip.SIPMessage),
+	tranport_cb func(*sip.SIPTransport, *sip.SIPMessage) bool,
+	term_cb func(sip.TransID, sip.TERM_REASON),
+) sip.SIPTransaction {
 
-	tid, err := siptrans.MakeClientTransactionID(msg)
+	tid, err := sip.MakeClientTransactionID(msg)
 	if err != nil {
-		log.Error().Msg("Cannot create siptrans ID")
+		log.Error().Msg("Cannot create sip ID")
 		return nil
 	}
 
-	var trans siptrans.Transaction
+	var trans sip.SIPTransaction
 
-	if msg.CSeq.Method == sipmess.Invite {
-		trans = siptrans.MakeICT(tid, msg, transport, core_cb, tranport_cb, term_cb)
+	if msg.CSeq.Method == sip.Invite {
+		trans = sip.MakeICT(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	} else {
-		trans = siptrans.MakeNICT(tid, msg, transport, core_cb, tranport_cb, term_cb)
+		trans = sip.MakeNICT(tid, msg, transport, core_cb, tranport_cb, term_cb)
 	}
 
-	log.Debug().Msg("Start client siptrans with trans id: " + tid.String())
+	log.Debug().Msg("Start client sip with trans id: " + tid.String())
 
 	mu.Lock()
 	m[tid] = trans
@@ -96,29 +97,29 @@ func StartClientTrans(
 	return trans
 }
 
-func DeleteTrans(tid siptrans.TransID) {
-	log.Debug().Msg("Delete siptrans with ID: " + tid.String())
+func DeleteTrans(tid sip.TransID) {
+	log.Debug().Msg("Delete sip with ID: " + tid.String())
 	mu.Lock()
 	delete(m, tid)
 	mu.Unlock()
 }
 
-func FindTrans(msg *sipmess.SIPMessage) siptrans.Transaction {
-	var tid siptrans.TransID
+func FindTrans(msg *sip.SIPMessage) sip.SIPTransaction {
+	var tid sip.TransID
 	var err error
 	if msg.Request != nil {
-		tid, err = siptrans.MakeServerTransactionID(msg)
+		tid, err = sip.MakeServerTransactionID(msg)
 	} else {
-		tid, err = siptrans.MakeClientTransactionID(msg)
+		tid, err = sip.MakeClientTransactionID(msg)
 	}
 
 	if err != nil {
-		log.Error().Msg("Cannot create siptrans ID")
+		log.Error().Msg("Cannot create sip ID")
 		return nil
 	}
 
 	if result, ok := m[tid]; ok {
-		log.Debug().Msg("Found siptrans with ID: " + tid.String())
+		log.Debug().Msg("Found sip with ID: " + tid.String())
 		return result
 	}
 

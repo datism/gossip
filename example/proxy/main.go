@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/datism/sip"
 	"github.com/arl/statsviz"
+	"github.com/datism/sip"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -90,7 +90,7 @@ func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
 		Str("client", clientAddr.String()).
 		Msg("Received message")
 
-	msg, err := sipmess.ParseSipMessage(data, sipmess.ParseOptions{
+	msg, err := sip.ParseSipMessage(data, sip.ParseOptions{
 		ParseFrom:       true,
 		ParseTo:         true,
 		ParseCseqByType: true,
@@ -101,13 +101,13 @@ func handleMessage(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte) {
 		return
 	}
 
-	transport := &siptransp.Transport{
+	transport := &sip.SIPTransport{
 		Protocol:   "udp",
 		Conn:       conn,
 		LocalAddr:  conn.LocalAddr().String(),
 		RemoteAddr: clientAddr.String(),
 	}
-	core.HandleMessage(msg, transport)
+	HandleMessage(msg, transport)
 }
 
 func httpServer(address string) {
