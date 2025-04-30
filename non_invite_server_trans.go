@@ -45,25 +45,25 @@ package sip
 
 // NIstrans represents the state machine for a Non-Invite Server Transaction
 type NIstrans struct {
-	id        TransID                            // Transaction ID
-	state     state                              // Current state of the transaction
-	message   *SIPMessage                        // The SIP message associated with the transaction
-	transport *Transport                         // Transport layer for sending and receiving messages
-	last_res  *SIPMessage                        // The last response received
-	timerJ    *transTimer                        // Timer J for retransmission
-	transc    chan *SIPMessage                   // Channel for receiving events like timeouts or messages
-	trpt_cb   func(*Transport, *SIPMessage) bool // Callback for transport layer
-	core_cb   func(*Transport, *SIPMessage)      // Callback for core layer
-	term_cb   func(TransID, TERM_REASON)         // Termination callback
+	id        TransID                               // Transaction ID
+	state     state                                 // Current state of the transaction
+	message   *SIPMessage                           // The SIP message associated with the transaction
+	transport *SIPTransport                         // Transport layer for sending and receiving messages
+	last_res  *SIPMessage                           // The last response received
+	timerJ    *transTimer                           // Timer J for retransmission
+	transc    chan *SIPMessage                      // Channel for receiving events like timeouts or messages
+	trpt_cb   func(*SIPTransport, *SIPMessage) bool // Callback for transport layer
+	core_cb   func(*SIPTransport, *SIPMessage)      // Callback for core layer
+	term_cb   func(TransID, TERM_REASON)            // Termination callback
 }
 
 // MakeNIST creates and initializes a new NIstrans instance with the given message and callbacks
 func MakeNIST(
 	id TransID,
 	msg *SIPMessage,
-	transport *Transport,
-	core_callback func(*Transport, *SIPMessage),
-	transport_callback func(*Transport, *SIPMessage) bool,
+	transport *SIPTransport,
+	core_callback func(*SIPTransport, *SIPMessage),
+	transport_callback func(*SIPTransport, *SIPMessage) bool,
 	term_callback func(TransID, TERM_REASON),
 ) *NIstrans {
 	//log.Trace().Str("transaction_id", id.String()).Interface("message", msg).Interface("transport", transport).Msg("Creating new Non-Invite server transaction")

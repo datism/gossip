@@ -45,26 +45,26 @@ package sip
 
 // NIctrans represents the state machine for a Non-Invite Client Transaction
 type NIctrans struct {
-	id        TransID                            // Transaction ID
-	state     state                              // Current state of the transaction
-	message   *SIPMessage                        // The SIP message associated with the transaction
-	transport *Transport                         // Transport layer for sending and receiving messages
-	timerE    *transTimer                        // Timer E for retransmissions
-	timerF    *transTimer                        // Timer F for transaction timeout
-	timerK    *transTimer                        // Timer K for termination after completion
-	transc    chan *SIPMessage                   // Channel for receiving events like timeouts or messages
-	trpt_cb   func(*Transport, *SIPMessage) bool // Callback for transport layer
-	core_cb   func(*Transport, *SIPMessage)      // Callback for core layer
-	term_cb   func(TransID, TERM_REASON)         // Termination callback
+	id        TransID                               // Transaction ID
+	state     state                                 // Current state of the transaction
+	message   *SIPMessage                           // The SIP message associated with the transaction
+	transport *SIPTransport                         // Transport layer for sending and receiving messages
+	timerE    *transTimer                           // Timer E for retransmissions
+	timerF    *transTimer                           // Timer F for transaction timeout
+	timerK    *transTimer                           // Timer K for termination after completion
+	transc    chan *SIPMessage                      // Channel for receiving events like timeouts or messages
+	trpt_cb   func(*SIPTransport, *SIPMessage) bool // Callback for transport layer
+	core_cb   func(*SIPTransport, *SIPMessage)      // Callback for core layer
+	term_cb   func(TransID, TERM_REASON)            // Termination callback
 }
 
 // MakeNICT creates and initializes a new NIctrans instance with the given message and callbacks
 func MakeNICT(
 	id TransID,
 	msg *SIPMessage,
-	transport *Transport,
-	core_callback func(*Transport, *SIPMessage),
-	transport_callback func(*Transport, *SIPMessage) bool,
+	transport *SIPTransport,
+	core_callback func(*SIPTransport, *SIPMessage),
+	transport_callback func(*SIPTransport, *SIPMessage) bool,
 	term_callback func(TransID, TERM_REASON),
 ) *NIctrans {
 	//log.Trace().Str("transaction_id", id.String()).Interface("message", msg).Interface("transport", transport).Msg("Creating new Non-Invite client transaction")

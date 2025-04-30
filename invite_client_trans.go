@@ -41,17 +41,17 @@ package sip
 
 // Ictrans represents a SIP INVITE client transaction
 type Ictrans struct {
-	id        TransID     // Transaction ID
-	state     state       // Current state of the transaction
-	transport *Transport  // Transport layer
-	message   *SIPMessage // The SIP message being processed (INVITE or response)
-	ack       *SIPMessage // The ACK message to be generated
+	id        TransID       // Transaction ID
+	state     state         // Current state of the transaction
+	transport *SIPTransport // Transport layer
+	message   *SIPMessage   // The SIP message being processed (INVITE or response)
+	ack       *SIPMessage   // The ACK message to be generated
 	timera    *transTimer
 	timerb    *transTimer
 	timerd    *transTimer
-	transc    chan *SIPMessage                   // Channel for receiving events and processing them
-	trpt_cb   func(*Transport, *SIPMessage) bool // Transport callback
-	core_cb   func(*Transport, *SIPMessage)      // Core callback
+	transc    chan *SIPMessage                      // Channel for receiving events and processing them
+	trpt_cb   func(*SIPTransport, *SIPMessage) bool // Transport callback
+	core_cb   func(*SIPTransport, *SIPMessage)      // Core callback
 	term_cb   func(TransID, TERM_REASON)
 }
 
@@ -59,9 +59,9 @@ type Ictrans struct {
 func MakeICT(
 	id TransID, // siptrans ID
 	msg *SIPMessage, // The INVITE message to be processed
-	transport *Transport, // Transport layer
-	core_callback func(*Transport, *SIPMessage), // Core callback
-	transport_callback func(*Transport, *SIPMessage) bool, // Transport layer callback
+	transport *SIPTransport, // Transport layer
+	core_callback func(*SIPTransport, *SIPMessage), // Core callback
+	transport_callback func(*SIPTransport, *SIPMessage) bool, // Transport layer callback
 	term_callback func(TransID, TERM_REASON), // Termination callback
 ) *Ictrans {
 	//log.Trace().Str("siptrans_id", id.String()).Interface("message", msg).Interface("transport", transport).Msg("Creating new INVITE client transaction")

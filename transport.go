@@ -4,7 +4,7 @@ import (
 	"net"
 )
 
-type Transport struct {
+type SIPTransport struct {
 	Conn       net.Conn
 	Protocol   string
 	LocalAddr  string

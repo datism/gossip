@@ -26,6 +26,12 @@ const (
 
 type TERM_REASON int
 
+const (
+	NORMAL TERM_REASON = iota
+	TIMEOUT
+	ERROR
+)
+
 func (t TERM_REASON) String() string {
 	switch t {
 	case NORMAL:
@@ -39,19 +45,13 @@ func (t TERM_REASON) String() string {
 	}
 }
 
-const (
-	NORMAL = iota
-	TIMEOUT
-	ERROR
-)
-
 type TransID string
 
 func (tid TransID) String() string {
 	return string(tid)
 }
 
-type Transaction interface {
+type SIPTransaction interface {
 	Event(SIPMessage)
 	Start()
 }

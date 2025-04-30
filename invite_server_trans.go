@@ -2,28 +2,28 @@ package sip
 
 // Sitrans represents the state machine for an INVITE server transaction
 type Sitrans struct {
-	id        TransID                            // Transaction ID
-	state     state                              // Current state of the transaction
-	message   *SIPMessage                        // The SIP message associated with the transaction
-	transport *Transport                         // Transport layer for sending and receiving messages
-	last_res  *SIPMessage                        // The last response received
-	timerprv  *transTimer                        // Timer for provisional responses
-	timerg    *transTimer                        // Timer G for retransmissions
-	timerh    *transTimer                        // Timer H for timeouts
-	timeri    *transTimer                        // Timer I for termination
-	transc    chan *SIPMessage                   // Channel for receiving events like timeouts or messages
-	trpt_cb   func(*Transport, *SIPMessage) bool // Transport callback
-	core_cb   func(*Transport, *SIPMessage)      // Core callback
-	term_cb   func(TransID, TERM_REASON)         // Termination callback
+	id        TransID                               // Transaction ID
+	state     state                                 // Current state of the transaction
+	message   *SIPMessage                           // The SIP message associated with the transaction
+	transport *SIPTransport                         // Transport layer for sending and receiving messages
+	last_res  *SIPMessage                           // The last response received
+	timerprv  *transTimer                           // Timer for provisional responses
+	timerg    *transTimer                           // Timer G for retransmissions
+	timerh    *transTimer                           // Timer H for timeouts
+	timeri    *transTimer                           // Timer I for termination
+	transc    chan *SIPMessage                      // Channel for receiving events like timeouts or messages
+	trpt_cb   func(*SIPTransport, *SIPMessage) bool // Transport callback
+	core_cb   func(*SIPTransport, *SIPMessage)      // Core callback
+	term_cb   func(TransID, TERM_REASON)            // Termination callback
 }
 
-// MakeSIT creates and initializes a new Sitrans instance with the given message and callbacks
-func MakeSIT(
+// MakeIST creates and initializes a new Sitrans instance with the given message and callbacks
+func MakeIST(
 	id TransID,
 	msg *SIPMessage,
-	transport *Transport,
-	core_callback func(*Transport, *SIPMessage),
-	transport_callback func(*Transport, *SIPMessage) bool,
+	transport *SIPTransport,
+	core_callback func(*SIPTransport, *SIPMessage),
+	transport_callback func(*SIPTransport, *SIPMessage) bool,
 	term_callback func(TransID, TERM_REASON),
 ) *Sitrans {
 	//log.Trace().Str("transaction_id", id.String()).Interface("message", msg).Interface("transport", transport).Msg("Creating new INVITE server transaction")

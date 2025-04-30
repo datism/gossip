@@ -1,17 +1,15 @@
-package main
+package proxy
 
 import (
 	"encoding/json"
 	"flag"
-	"gossip/core"
-	"gossip/sipmess"
-	"gossip/siptransp"
 	"net"
 	"net/http"
 	"os"
 	"runtime"
 	"time"
 
+	"github.com/datism/sip"
 	"github.com/arl/statsviz"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
