@@ -135,11 +135,11 @@ func StatelessRoute(request *sip.SIPMessage, transp *sip.SIPTransport) {
 		log.Error().Err(err).Msg("Failed to resolve UDP address")
 		return
 	}
-	conn, err := net.DialUDP("udp", nil, daddr)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to dial UDP address")
-		return
-	}
+	// conn, err := net.DialUDP("udp", nil, daddr)
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("Failed to dial UDP address")
+	// 	return
+	// }
 
 	bin := request.Serialize()
 	if bin == nil {
@@ -147,7 +147,19 @@ func StatelessRoute(request *sip.SIPMessage, transp *sip.SIPTransport) {
 		return
 	}
 
-	_, err = conn.Write(bin)
+	// _, err = tr.Write(bin)
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("Failed to write to UDP connection")
+	// 	return
+	// }
+
+	udpConn, ok := transp.Conn.(*net.UDPConn)
+	if !ok {
+		log.Error().Msg("Error transport type")
+		return
+	}
+
+	_, err = udpConn.WriteTo(bin, daddr)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to write to UDP connection")
 		return
