@@ -1,4 +1,4 @@
-package sipmess
+package sip
 
 import (
 	"bytes"

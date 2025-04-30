@@ -1,8 +1,7 @@
-package test
+package sip
 
 import (
 	"bytes"
-	"gossip/sipmess"
 	"reflect"
 	"testing"
 )
@@ -11,7 +10,7 @@ func TestParseSIPMessage(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    *sipmess.SIPMessage
+		want    *SIPMessage
 		wantErr bool
 	}{
 		{
@@ -27,42 +26,42 @@ func TestParseSIPMessage(t *testing.T) {
 				"Content-Length: 13\r\n" +
 				"\r\n" +
 				"Test SDP body",
-			want: &sipmess.SIPMessage{
-				Startline: sipmess.Startline{
-					Request: &sipmess.Request{
-						Method:     sipmess.Invite,
-						RequestURI: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Port: -1, Domain: []byte("example.com")},
+			want: &SIPMessage{
+				Startline: Startline{
+					Request: &Request{
+						Method:     Invite,
+						RequestURI: SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Port: -1, Domain: []byte("example.com")},
 					},
 				},
-				TopmostVia: sipmess.SIPVia{
+				TopmostVia: SIPVia{
 					Tranport: "udp",
 					Domain:   []byte("192.168.1.1"),
 					Port:     5060,
 					Branch:   []byte("z9hG4bK776asdhds"),
 				},
-				From: sipmess.SIPFromTo{
-					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("example.com"), Port: -1},
+				From: SIPFromTo{
+					Uri: SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("example.com"), Port: -1},
 					Tag: []byte("1928301774"),
 				},
-				To: sipmess.SIPFromTo{
-					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Domain: []byte("example.com"), Port: -1},
+				To: SIPFromTo{
+					Uri: SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Domain: []byte("example.com"), Port: -1},
 				},
 				CallID: []byte("a84b4c76e66710@pc33.example.com"),
-				CSeq: sipmess.SIPCseq{
+				CSeq: SIPCseq{
 					Seq:    314159,
-					Method: sipmess.Invite,
+					Method: Invite,
 				},
-				Contacts: []sipmess.SIPContact{
+				Contacts: []SIPContact{
 					{
-						Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("192.168.1.1"), Port: -1},
+						Uri: SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("192.168.1.1"), Port: -1},
 					},
 				},
-				Headers: map[sipmess.SIPHeader][][]byte{
-					sipmess.ContentType:   {[]byte("application/sdp")},
-					sipmess.ContentLength: {[]byte("13")},
+				Headers: map[SIPHeader][][]byte{
+					ContentType:   {[]byte("application/sdp")},
+					ContentLength: {[]byte("13")},
 				},
 				Body: []byte("Test SDP body"),
-				Options: sipmess.ParseOptions{
+				Options: ParseOptions{
 					ParseTopMostVia: true,
 					ParseFrom:       true,
 					ParseTo:         true,
@@ -84,42 +83,42 @@ func TestParseSIPMessage(t *testing.T) {
 				"Contact: <sip:bob@192.168.1.2>\r\n" +
 				"Content-Length: 0\r\n" +
 				"\r\n",
-			want: &sipmess.SIPMessage{
-				Startline: sipmess.Startline{
-					Response: &sipmess.Response{
+			want: &SIPMessage{
+				Startline: Startline{
+					Response: &Response{
 						StatusCode:   200,
 						ReasonPhrase: []byte("OK"),
 					},
 				},
-				TopmostVia: sipmess.SIPVia{
+				TopmostVia: SIPVia{
 					Tranport: "udp",
 					Domain:   []byte("192.168.1.1"),
 					Port:     5060,
 					Branch:   []byte("z9hG4bK776asdhds"),
 				},
-				From: sipmess.SIPFromTo{
-					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("example.com"), Port: -1},
+				From: SIPFromTo{
+					Uri: SIPUri{Scheme: []byte("sip"), User: []byte("alice"), Domain: []byte("example.com"), Port: -1},
 					Tag: []byte("1928301774"),
 				},
-				To: sipmess.SIPFromTo{
-					Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Domain: []byte("example.com"), Port: -1},
+				To: SIPFromTo{
+					Uri: SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Domain: []byte("example.com"), Port: -1},
 					Tag: []byte("a6c85cf"),
 				},
 				CallID: []byte("a84b4c76e66710@pc33.example.com"),
-				CSeq: sipmess.SIPCseq{
+				CSeq: SIPCseq{
 					Seq:    314159,
-					Method: sipmess.Invite,
+					Method: Invite,
 				},
-				Contacts: []sipmess.SIPContact{
+				Contacts: []SIPContact{
 					{
-						Uri: sipmess.SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Domain: []byte("192.168.1.2"), Port: -1},
+						Uri: SIPUri{Scheme: []byte("sip"), User: []byte("bob"), Domain: []byte("192.168.1.2"), Port: -1},
 					},
 				},
-				Headers: map[sipmess.SIPHeader][][]byte{
-					sipmess.ContentLength: {[]byte("0")},
+				Headers: map[SIPHeader][][]byte{
+					ContentLength: {[]byte("0")},
 				},
 				Body: []byte(""),
-				Options: sipmess.ParseOptions{
+				Options: ParseOptions{
 					ParseTopMostVia: true,
 					ParseFrom:       true,
 					ParseTo:         true,
@@ -140,7 +139,7 @@ func TestParseSIPMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sipmess.ParseSipMessage([]byte(tt.input), sipmess.ParseOptions{
+			got, err := ParseSipMessage([]byte(tt.input), ParseOptions{
 				ParseTopMostVia: true,
 				ParseFrom:       true,
 				ParseTo:         true,

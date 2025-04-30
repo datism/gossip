@@ -1,4 +1,4 @@
-package siptrans
+package sip
 
 import (
 	"time"

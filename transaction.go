@@ -1,8 +1,7 @@
-package siptrans
+package sip
 
 import (
 	"fmt"
-	"gossip/sipmess"
 )
 
 type TransType int
@@ -52,19 +51,8 @@ func (tid TransID) String() string {
 	return string(tid)
 }
 
-// type TransID struct {
-// 	// Type     TransType
-// 	BranchID string
-// 	Method   string
-// 	SentBy   string
-// }
-
-// func (tid TransID) String() string {
-// 	return fmt.Sprintf("%s;%s;%s", tid.BranchID, tid.Method, tid.SentBy)
-// }
-
 type Transaction interface {
-	Event(*sipmess.SIPMessage)
+	Event(SIPMessage)
 	Start()
 }
 
@@ -94,7 +82,7 @@ type Transaction interface {
 				transaction, except for ACK, where the method of the request
 				that created the transaction is INVITE.
 */
-func MakeServerTransactionID(msg *sipmess.SIPMessage) (TransID, error) {
+func MakeServerTransactionID(msg *SIPMessage) (TransID, error) {
 	topmostVia := msg.TopmostVia
 	branch := topmostVia.Branch
 
@@ -103,23 +91,23 @@ func MakeServerTransactionID(msg *sipmess.SIPMessage) (TransID, error) {
 	}
 
 	method := msg.Request.Method
-	if method == sipmess.Ack {
-		method = sipmess.Invite
+	if method == Ack {
+		method = Invite
 	}
 
-	return TransID(fmt.Sprintf("%s;%s;%s", branch, sipmess.SerializeMethod(method), topmostVia.Domain)), nil
+	return TransID(fmt.Sprintf("%s;%s;%s", branch, SerializeMethod(method), topmostVia.Domain)), nil
 }
 
-func MakeClientTransactionID(msg *sipmess.SIPMessage) (TransID, error) {
+func MakeClientTransactionID(msg *SIPMessage) (TransID, error) {
 	topmostVia := msg.TopmostVia
 	branch := topmostVia.Branch
 
-	var method sipmess.SIPMethod
+	var method SIPMethod
 	if msg.Request != nil {
 		method = msg.Request.Method
 	} else {
 		method = msg.CSeq.Method
 	}
 
-	return TransID(fmt.Sprintf("%s;%s", branch, sipmess.SerializeMethod(method))), nil
+	return TransID(fmt.Sprintf("%s;%s", branch, SerializeMethod(method))), nil
 }

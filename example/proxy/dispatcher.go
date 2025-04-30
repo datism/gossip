@@ -1,9 +1,6 @@
-package core
+package proxy
 
 import (
-	"gossip/sipmess"
-	"gossip/siptrans"
-	"gossip/siptransp"
 	"sync"
 
 	"github.com/rs/zerolog/log"
